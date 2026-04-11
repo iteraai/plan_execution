@@ -1,6 +1,6 @@
 {
   "name": "execute-approved-plan",
-  "description": "Execute the next dependency-ready planned pull request for an iteration task using its canonical task ID.",
+  "description": "Self-contained public skill that logs into Itera, resolves the next dependency-ready planned pull request for an iteration task, and claims it.",
   "version": "1.0.0",
   "input": {
     "type": "object",
@@ -15,13 +15,26 @@
     "additionalProperties": false
   },
   "behavior": {
+    "installEntryPoint": "python3 install.py",
+    "sessionFile": "~/.codex/auth/plan_execution/iteraz.json",
+    "appHeader": "ITERAZ",
+    "platformHeader": "WEB",
     "requiredGraphQLCalls": [
+      "sendEmailVerificationCode(email)",
+      "loginWithEmailMfa(identifier, code)",
+      "completeEmailLoginWithTotp(challengeId, code)",
+      "completeEmailLoginWithRecoveryCode(challengeId, code)",
+      "beginTotpEnrollment",
+      "confirmTotpEnrollment(code)",
+      "refreshToken(refreshToken)",
+      "socialMe",
       "getNextReadyPlannedPullRequestForTask(canonicalTaskId)",
       "claimPlannedPullRequestExecution(plannedPullRequestId, branchName)"
     ],
     "canonicalTaskID": true,
-    "nextReadySelection": "Server-side (via getNextReadyPlannedPullRequestForTask).",
+    "nextReadySelection": "Server-side via getNextReadyPlannedPullRequestForTask(canonicalTaskId).",
     "claimedState": "claimPlannedPullRequestExecution",
+    "branchSuggestionFormat": "itera/<canonical-task-id-lower>/pr-<position+1>",
     "v1ExecutionStates": [
       "PLANNED",
       "IMPLEMENTING",
@@ -42,9 +55,9 @@
         "type": "string",
         "enum": [
           "SUCCESS",
-          "NO_TASK",
-          "NO_READY_PR",
           "AUTH_REQUIRED",
+          "LOGIN_FAILED",
+          "NO_READY_PR",
           "UNAVAILABLE"
         ]
       },
@@ -52,7 +65,7 @@
         "type": "string"
       },
       "iterationTask": {
-        "type": "object",
+        "type": ["object", "null"],
         "properties": {
           "id": { "type": "string" },
           "canonicalId": { "type": "string" },
@@ -74,12 +87,25 @@
         }
       },
       "execution": {
-        "type": "object",
+        "type": ["object", "null"],
         "properties": {
           "executionState": { "type": "string" },
           "claimedBy": { "type": ["string", "null"] },
-          "claimedAt": { "type": ["string", "null"] }
+          "claimedAt": { "type": ["string", "null"] },
+          "branchName": { "type": ["string", "null"] },
+          "providerPullRequestNumber": { "type": ["integer", "null"] },
+          "providerPullRequestUrl": { "type": ["string", "null"] }
         }
+      },
+      "viewer": {
+        "type": ["object", "null"],
+        "properties": {
+          "username": { "type": "string" },
+          "email": { "type": "string" }
+        }
+      },
+      "message": {
+        "type": ["string", "null"]
       }
     }
   }

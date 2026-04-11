@@ -6,6 +6,6 @@ As the repository grows, each skill can live in its own file or subdirectory wit
 
 ## Skills in this repo
 
-- `execute-approved-plan`: select and claim the next dependency-ready planned pull request for a canonical Itera task ID.
+- `execute-approved-plan`: self-contained public skill that logs into Itera, selects the next dependency-ready planned pull request for a canonical task ID, and claims it.
 
-Use `skills/README.md` (this file) to discover local catalog entries and `skills/execute-approved-plan/README.md` (or `SKILL.md`) for input and runtime details.
+Use `skills/README.md` (this file) to discover local catalog entries and `skills/execute-approved-plan/README.md` (or `SKILL.md`) for install, auth, and runtime details.

@@ -1,47 +1,59 @@
 ---
 name: execute-approved-plan
-description: Claim the next dependency-ready planned pull request for a canonical Itera task using the approved-plan execution contracts.
+description: Public self-contained skill that logs into Itera, resolves the next dependency-ready planned pull request for a canonical task ID, and claims it.
 ---
 
 # Execute Approved Plan
 
-This skill claims the next dependency-ready planned pull request for an iteration task using its canonical task ID.
+This skill is self-contained. It does not depend on any other local skill or pre-existing auth helper.
 
-Use cases:
+It logs the user into Itera with `App: ITERAZ`, persists a refreshable local session, fetches the next dependency-ready planned pull request, claims it, and returns the deterministic branch suggestion plus execution state.
 
-- Start execution in the approved-planning phase using human-friendly task IDs.
-- Resolve dependency readiness without client-side plan graph traversal.
-- Bind branch ownership before provider pull request creation.
+## Install
+
+Run `python3 install.py` from the repository root.
+
+The installer copies this skill into `~/.codex/skills/execute-approved-plan`.
 
 ## Input Contract
 
-See [`input-contract.json`](./input-contract.json).
+See `input-contract.json`.
 
 ## Core behavior
 
-1. Refresh Itera auth token via the existing auth helper.
-2. Call `getNextReadyPlannedPullRequestForTask(canonicalTaskId)`.
-3. If no PR is returned (or the selection is unavailable), stop and surface the reason.
-4. If the returned PR is unavailable, return a clear unavailable message.
-5. Claim the PR with `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)` to support webhook-based state transitions.
-6. Return the claimed execution details and a deterministic branch suggestion.
+1. Run `python3 ~/.codex/skills/execute-approved-plan/scripts/execute_approved_plan.py --canonical-task-id <CANONICAL_TASK_ID>`.
+2. If the session file exists at `~/.codex/auth/plan_execution/iteraz.json`, refresh it with `refreshToken(refreshToken)`.
+3. If no valid session exists, bootstrap login with:
+   - `sendEmailVerificationCode(email)`
+   - `loginWithEmailMfa(identifier, code)`
+   - `completeEmailLoginWithTotp(challengeId, code)` or `completeEmailLoginWithRecoveryCode(challengeId, code)` when needed
+   - `beginTotpEnrollment` and `confirmTotpEnrollment(code)` when the server requires first-time TOTP setup
+4. Validate the authenticated session with `socialMe`.
+5. Call `getNextReadyPlannedPullRequestForTask(canonicalTaskId)`.
+6. If no ready planned pull request exists, surface the unavailable reason and stop.
+7. Build the branch name as `itera/<canonical-task-id-lower>/pr-<position+1>`.
+8. Claim the PR with `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)`.
+9. Return the claimed execution details and suggested branch name as JSON.
 
 ## Runtime constraints
 
 - Canonical task ID input is required for every invocation.
-- Implementation scope is `plan_execution` only (`README.md` and `skills/*`).
-- This skill is a client of GraphQL execution contracts; it should not become a second source of truth.
+- The GraphQL app context is fixed to `ITERAZ`.
+- The GraphQL platform header is fixed to `WEB`.
+- This skill is a client of GraphQL execution contracts; it is not a source of truth.
 - Execution states are limited to `PLANNED`, `IMPLEMENTING`, `IN_REVIEW`, and `MERGED` for v1.
 
 ## Success and error states
 
 - `SUCCESS`: claim was created and branch suggestion is returned.
+- `AUTH_REQUIRED`: interactive login is disabled and no valid stored session is available.
+- `LOGIN_FAILED`: login, MFA challenge, or enrollment could not be completed.
 - `NO_READY_PR`: there is no dependency-ready planned pull request.
 - `UNAVAILABLE`: the next item is not startable at the moment (already claimed or otherwise blocked).
-- `AUTH_REQUIRED`: token refresh or auth helper failure.
 
 ## References
 
-- [`/Users/jpellat/.codex/skills/social-graph-api-auth/SKILL.md`](/Users/jpellat/.codex/skills/social-graph-api-auth/SKILL.md): required login flow.
-- [input contract](./input-contract.json)
-- [README](/Users/jpellat/.codex/worktrees/3229/plan_execution/README.md)
+- `scripts/auth_login.py`
+- `scripts/auth_refresh.py`
+- `scripts/graphql_client.py`
+- `scripts/execute_approved_plan.py`
