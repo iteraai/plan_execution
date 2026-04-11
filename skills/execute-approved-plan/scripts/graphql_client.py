@@ -8,7 +8,6 @@ import os
 from typing import Any
 from urllib import error, request
 
-
 DEFAULT_GRAPHQL_URL = os.environ.get(
     "ITERA_GRAPHQL_URL", "https://api.iteradev.ai/graphql/"
 )

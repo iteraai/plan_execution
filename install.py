@@ -8,7 +8,6 @@ from pathlib import Path
 import shutil
 import sys
 
-
 REPO_ROOT = Path(__file__).resolve().parent
 SOURCE_SKILL_DIR = REPO_ROOT / "skills" / "execute-approved-plan"
 DEFAULT_DESTINATION_DIR = Path.home() / ".codex" / "skills" / "execute-approved-plan"

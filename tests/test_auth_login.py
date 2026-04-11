@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from unittest import mock
 
-
 SCRIPTS_DIR = (
     Path(__file__).resolve().parents[1] / "skills" / "execute-approved-plan" / "scripts"
 )

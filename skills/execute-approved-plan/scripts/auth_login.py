@@ -9,14 +9,12 @@ from pathlib import Path
 import sys
 from typing import Any
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import auth_refresh
 import graphql_client
-
 
 SEND_EMAIL_VERIFICATION_CODE_MUTATION = """
 mutation SendEmailVerificationCode($email: String!) {

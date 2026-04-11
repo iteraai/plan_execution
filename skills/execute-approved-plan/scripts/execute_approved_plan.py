@@ -8,7 +8,6 @@ from pathlib import Path
 import sys
 from typing import Any
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
@@ -16,7 +15,6 @@ if str(SCRIPT_DIR) not in sys.path:
 import auth_login
 import auth_refresh
 import graphql_client
-
 
 GET_NEXT_READY_PLANNED_PULL_REQUEST_QUERY = """
 query GetNextReadyPlannedPullRequestForTask($canonicalTaskId: IterationTaskCanonicalID!) {
