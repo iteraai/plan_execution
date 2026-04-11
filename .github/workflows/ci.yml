@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install formatting dependencies
+        run: python -m pip install black
+
+      - name: Check formatting
+        run: python -m black --check install.py skills/execute-approved-plan/scripts tests
+
+      - name: Verify Python compilation
+        run: python -m compileall install.py skills/execute-approved-plan/scripts tests
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
