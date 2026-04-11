@@ -1,0 +1,112 @@
+{
+  "name": "execute-approved-plan",
+  "description": "Self-contained public skill that logs into Itera, resolves the next dependency-ready planned pull request for an iteration task, and claims it.",
+  "version": "1.0.0",
+  "input": {
+    "type": "object",
+    "required": ["canonicalTaskId"],
+    "properties": {
+      "canonicalTaskId": {
+        "type": "string",
+        "pattern": "^[A-Z0-9]+-[1-9][0-9]*$",
+        "description": "Canonical Itera task ID (for example FRONTPAGE-42)."
+      }
+    },
+    "additionalProperties": false
+  },
+  "behavior": {
+    "installEntryPoint": "python3 install.py",
+    "sessionFile": "~/.codex/auth/plan_execution/iteraz.json",
+    "appHeader": "ITERAZ",
+    "platformHeader": "WEB",
+    "requiredGraphQLCalls": [
+      "sendEmailVerificationCode(email)",
+      "loginWithEmailMfa(identifier, code)",
+      "completeEmailLoginWithTotp(challengeId, code)",
+      "completeEmailLoginWithRecoveryCode(challengeId, code)",
+      "beginTotpEnrollment",
+      "confirmTotpEnrollment(code)",
+      "refreshToken(refreshToken)",
+      "socialMe",
+      "getNextReadyPlannedPullRequestForTask(canonicalTaskId)",
+      "claimPlannedPullRequestExecution(plannedPullRequestId, branchName)"
+    ],
+    "canonicalTaskID": true,
+    "nextReadySelection": "Server-side via getNextReadyPlannedPullRequestForTask(canonicalTaskId).",
+    "claimedState": "claimPlannedPullRequestExecution",
+    "branchSuggestionFormat": "itera/<canonical-task-id-lower>/pr-<position+1>",
+    "v1ExecutionStates": [
+      "PLANNED",
+      "IMPLEMENTING",
+      "IN_REVIEW",
+      "MERGED"
+    ]
+  },
+  "output": {
+    "type": "object",
+    "required": [
+      "status",
+      "canonicalTaskId",
+      "iterationTask",
+      "plan"
+    ],
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "SUCCESS",
+          "AUTH_REQUIRED",
+          "LOGIN_FAILED",
+          "NO_READY_PR",
+          "UNAVAILABLE"
+        ]
+      },
+      "canonicalTaskId": {
+        "type": "string"
+      },
+      "iterationTask": {
+        "type": ["object", "null"],
+        "properties": {
+          "id": { "type": "string" },
+          "canonicalId": { "type": "string" },
+          "status": { "type": "string" }
+        }
+      },
+      "plan": {
+        "type": "object",
+        "properties": {
+          "plannedPullRequest": {
+            "type": "object"
+          },
+          "unavailableReason": {
+            "type": ["string", "null"]
+          },
+          "suggestedBranchName": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "execution": {
+        "type": ["object", "null"],
+        "properties": {
+          "executionState": { "type": "string" },
+          "claimedBy": { "type": ["string", "null"] },
+          "claimedAt": { "type": ["string", "null"] },
+          "branchName": { "type": ["string", "null"] },
+          "providerPullRequestNumber": { "type": ["integer", "null"] },
+          "providerPullRequestUrl": { "type": ["string", "null"] }
+        }
+      },
+      "viewer": {
+        "type": ["object", "null"],
+        "properties": {
+          "username": { "type": "string" },
+          "email": { "type": "string" }
+        }
+      },
+      "message": {
+        "type": ["string", "null"]
+      }
+    }
+  }
+}
