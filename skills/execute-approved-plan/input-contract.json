@@ -1,0 +1,86 @@
+{
+  "name": "execute-approved-plan",
+  "description": "Execute the next dependency-ready planned pull request for an iteration task using its canonical task ID.",
+  "version": "1.0.0",
+  "input": {
+    "type": "object",
+    "required": ["canonicalTaskId"],
+    "properties": {
+      "canonicalTaskId": {
+        "type": "string",
+        "pattern": "^[A-Z0-9]+-[1-9][0-9]*$",
+        "description": "Canonical Itera task ID (for example FRONTPAGE-42)."
+      }
+    },
+    "additionalProperties": false
+  },
+  "behavior": {
+    "requiredGraphQLCalls": [
+      "getNextReadyPlannedPullRequestForTask(canonicalTaskId)",
+      "claimPlannedPullRequestExecution(plannedPullRequestId, branchName)"
+    ],
+    "canonicalTaskID": true,
+    "nextReadySelection": "Server-side (via getNextReadyPlannedPullRequestForTask).",
+    "claimedState": "claimPlannedPullRequestExecution",
+    "v1ExecutionStates": [
+      "PLANNED",
+      "IMPLEMENTING",
+      "IN_REVIEW",
+      "MERGED"
+    ]
+  },
+  "output": {
+    "type": "object",
+    "required": [
+      "status",
+      "canonicalTaskId",
+      "iterationTask",
+      "plan"
+    ],
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "SUCCESS",
+          "NO_TASK",
+          "NO_READY_PR",
+          "AUTH_REQUIRED",
+          "UNAVAILABLE"
+        ]
+      },
+      "canonicalTaskId": {
+        "type": "string"
+      },
+      "iterationTask": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "canonicalId": { "type": "string" },
+          "status": { "type": "string" }
+        }
+      },
+      "plan": {
+        "type": "object",
+        "properties": {
+          "plannedPullRequest": {
+            "type": "object"
+          },
+          "unavailableReason": {
+            "type": ["string", "null"]
+          },
+          "suggestedBranchName": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "execution": {
+        "type": "object",
+        "properties": {
+          "executionState": { "type": "string" },
+          "claimedBy": { "type": ["string", "null"] },
+          "claimedAt": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}
