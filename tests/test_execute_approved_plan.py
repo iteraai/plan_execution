@@ -79,6 +79,7 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
                         "position": 0,
                         "title": "PR 1",
                         "goal": "Ship the slice",
+                        "specifications": "PR-specific specs",
                         "deploymentTargetLabel": "apps/itera",
                         "repositoryTarget": {
                             "provider": "GITHUB",
@@ -114,6 +115,7 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
                                 "position": 0,
                                 "title": "PR 1",
                                 "goal": "Ship the slice",
+                                "specifications": "PR-specific specs",
                                 "deploymentTargetLabel": "apps/itera",
                                 "allowedPathPrefixes": ["src"],
                                 "mainTouchPoints": ["backend", "frontend"],
@@ -170,6 +172,10 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
         self.assertEqual(result["execution"]["executionState"], "IMPLEMENTING")
         self.assertEqual(
             result["implementationContext"]["selectedPlannedPullRequest"]["id"], "pr-1"
+        )
+        self.assertEqual(
+            result["implementationContext"]["selectedPlannedPullRequest"]["specifications"],
+            "PR-specific specs",
         )
         self.assertEqual(
             result["implementationContext"]["currentPlan"]["id"],

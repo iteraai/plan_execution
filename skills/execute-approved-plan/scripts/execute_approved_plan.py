@@ -25,11 +25,12 @@ query GetNextReadyPlannedPullRequestForTask($canonicalTaskId: IterationTaskCanon
       status
     }
     unavailableReason
-    plannedPullRequest {
+      plannedPullRequest {
       id
       position
       title
       goal
+      specifications
       deploymentTargetLabel
       repositoryTarget {
         provider
@@ -68,13 +69,14 @@ query GetIterationTaskContext($taskId: IterationTaskID!) {
       pullRequests {
         id
         position
-        title
-        goal
-        deploymentTargetLabel
-        allowedPathPrefixes
-        mainTouchPoints
-        modelsToCreate
-        newApiContracts
+                            title
+                            goal
+                            deploymentTargetLabel
+                            specifications
+                            allowedPathPrefixes
+                            mainTouchPoints
+                            modelsToCreate
+                            newApiContracts
         repositoryTarget {
           provider
           owner
@@ -178,6 +180,7 @@ def _build_pull_request_summary(
         "position": planned_pull_request.get("position"),
         "title": planned_pull_request.get("title"),
         "goal": planned_pull_request.get("goal"),
+        "specifications": planned_pull_request.get("specifications"),
         "deploymentTargetLabel": planned_pull_request.get("deploymentTargetLabel"),
         "allowedPathPrefixes": planned_pull_request.get("allowedPathPrefixes"),
         "mainTouchPoints": planned_pull_request.get("mainTouchPoints"),
