@@ -26,15 +26,28 @@ query GetNextReadyPlannedPullRequestForTask($canonicalTaskId: IterationTaskCanon
     }
     unavailableReason
       plannedPullRequest {
-      id
-      position
-      title
-      goal
-      specifications
-      deploymentTargetLabel
-      repositoryTarget {
-        provider
-        owner
+        id
+        position
+        title
+        goal
+        specifications {
+          id
+          sourceTaskSpecificationId
+          type
+          typeLabel
+          customTypeLabel
+          title
+          deltaExplanation
+          before
+          after
+          target
+          rule
+          inferredFromPrecedent
+        }
+        deploymentTargetLabel
+        repositoryTarget {
+          provider
+          owner
         repoName
         mainBranchName
         basePath
@@ -72,12 +85,25 @@ query GetIterationTaskContext($taskId: IterationTaskID!) {
                             title
                             goal
                             deploymentTargetLabel
-                            specifications
+                            specifications {
+                              id
+                              sourceTaskSpecificationId
+                              type
+                              typeLabel
+                              customTypeLabel
+                              title
+                              deltaExplanation
+                              before
+                              after
+                              target
+                              rule
+                              inferredFromPrecedent
+                            }
                             allowedPathPrefixes
                             mainTouchPoints
                             modelsToCreate
                             newApiContracts
-        repositoryTarget {
+                            repositoryTarget {
           provider
           owner
           repoName
