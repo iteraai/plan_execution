@@ -174,7 +174,9 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
             result["implementationContext"]["selectedPlannedPullRequest"]["id"], "pr-1"
         )
         self.assertEqual(
-            result["implementationContext"]["selectedPlannedPullRequest"]["specifications"],
+            result["implementationContext"]["selectedPlannedPullRequest"][
+                "specifications"
+            ],
             "PR-specific specs",
         )
         self.assertEqual(
