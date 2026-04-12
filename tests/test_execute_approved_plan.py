@@ -98,6 +98,42 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
                 }
             },
             {
+                "getIterationTask": {
+                    "id": "task-1",
+                    "canonicalId": "FRONTPAGE-42",
+                    "name": "Frontpage rollout",
+                    "goalDescription": "Build planned PR #1",
+                    "successCriteria": "Pass all checks",
+                    "outOfScope": "None",
+                    "contextProblem": "none",
+                    "currentPlan": {
+                        "id": "plan-1",
+                        "pullRequests": [
+                            {
+                                "id": "pr-1",
+                                "position": 0,
+                                "title": "PR 1",
+                                "goal": "Ship the slice",
+                                "deploymentTargetLabel": "apps/itera",
+                                "allowedPathPrefixes": ["src"],
+                                "mainTouchPoints": ["backend", "frontend"],
+                                "modelsToCreate": ["m1"],
+                                "newApiContracts": ["v1"],
+                                "repositoryTarget": {
+                                    "provider": "GITHUB",
+                                    "owner": "iteraai",
+                                    "repoName": "Web",
+                                    "mainBranchName": "main",
+                                    "basePath": "",
+                                    "stableRepositoryId": "repo-1",
+                                },
+                            }
+                        ],
+                        "pullRequestDependencies": [],
+                    },
+                }
+            },
+            {
                 "claimPlannedPullRequestExecution": {
                     "plannedPullRequest": {
                         "id": "pr-1",
@@ -132,6 +168,13 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
             result["plan"]["suggestedBranchName"], "itera/frontpage-42/pr-1"
         )
         self.assertEqual(result["execution"]["executionState"], "IMPLEMENTING")
+        self.assertEqual(
+            result["implementationContext"]["selectedPlannedPullRequest"]["id"], "pr-1"
+        )
+        self.assertEqual(
+            result["implementationContext"]["currentPlan"]["id"],
+            "plan-1",
+        )
 
 
 if __name__ == "__main__":

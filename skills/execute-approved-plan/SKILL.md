@@ -30,10 +30,11 @@ See `input-contract.json`.
    - `beginTotpEnrollment` and `confirmTotpEnrollment(code)` when the server requires first-time TOTP setup
 4. Validate the authenticated session with `socialMe`.
 5. Call `getNextReadyPlannedPullRequestForTask(canonicalTaskId)`.
-6. If no ready planned pull request exists, surface the unavailable reason and stop.
-7. Build the branch name as `itera/<canonical-task-id-lower>/pr-<position+1>`.
-8. Claim the PR with `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)`.
-9. Return the claimed execution details and suggested branch name as JSON.
+6. If a PR is ready, optionally enrich context with `getIterationTask(taskId)` so downstream execution has full plan context.
+7. If no ready planned pull request exists, surface the unavailable reason and stop.
+8. Build the branch name as `itera/<canonical-task-id-lower>/pr-<position+1>`.
+9. Claim the PR with `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)`.
+10. Return the claimed execution details, suggested branch name, and `implementationContext` as JSON.
 
 ## Runtime constraints
 
