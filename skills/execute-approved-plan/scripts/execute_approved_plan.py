@@ -257,7 +257,7 @@ def _build_implementation_context(
     selected_id = selected.get("id") if selected else None
 
     summarized_pull_requests = []
-    for planned_pull_request in (current_plan.get("pullRequests") or []):
+    for planned_pull_request in current_plan.get("pullRequests") or []:
         summary = _build_pull_request_summary(planned_pull_request)
         if summary is not None:
             summarized_pull_requests.append(summary)
