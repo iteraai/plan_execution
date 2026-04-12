@@ -29,6 +29,7 @@
       "refreshToken(refreshToken)",
       "socialMe",
       "getNextReadyPlannedPullRequestForTask(canonicalTaskId)",
+      "getIterationTask(taskId)",
       "claimPlannedPullRequestExecution(plannedPullRequestId, branchName)"
     ],
     "canonicalTaskID": true,
@@ -83,6 +84,48 @@
           },
           "suggestedBranchName": {
             "type": ["string", "null"]
+          }
+        }
+      },
+      "implementationContext": {
+        "type": ["object", "null"],
+        "properties": {
+          "contextError": {
+            "type": ["string", "null"]
+          },
+          "iterationTaskContext": {
+            "type": ["object", "null"]
+          },
+          "selectedPlannedPullRequest": {
+            "type": ["object", "null"]
+          },
+          "currentPlan": {
+            "type": ["object", "null"],
+            "properties": {
+              "id": {
+                "type": ["string", "null"]
+              },
+              "pullRequests": {
+                "type": "array",
+                "items": {
+                  "type": ["object", "null"]
+                }
+              },
+              "dependencyContext": {
+                "type": ["object", "null"]
+              }
+            }
+          },
+          "repositoryHints": {
+            "type": ["object", "null"],
+            "properties": {
+              "suggestedBasePath": {
+                "type": ["string", "null"]
+              },
+              "suggestedStableRepositoryId": {
+                "type": ["string", "null"]
+              }
+            }
           }
         }
       },

@@ -22,9 +22,10 @@ This installs the skill into `~/.codex/skills/execute-approved-plan`.
 4. Validate the authenticated session with `socialMe`.
 5. Read the next dependency-ready planned PR with `getNextReadyPlannedPullRequestForTask(canonicalTaskId)`.
 6. If no PR is available, return an explicit unavailable reason and exit.
-7. Generate the branch name as `itera/<canonical-task-id-lower>/pr-<position+1>`.
-8. Call `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)` to transition into `IMPLEMENTING` and bind the branch.
-9. Return suggested branch name, execution state, and selected planned-pull-request metadata.
+7. Enrich context with `getIterationTask(taskId)` for full plan intent, dependencies, and repository target metadata.
+8. Generate the branch name as `itera/<canonical-task-id-lower>/pr-<position+1>`.
+9. Call `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)` to transition into `IMPLEMENTING` and bind the branch.
+10. Return suggested branch name, execution state, and a richer implementation context payload.
 
 ## Runtime entrypoint
 
