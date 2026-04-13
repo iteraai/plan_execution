@@ -79,6 +79,22 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
                         "position": 0,
                         "title": "PR 1",
                         "goal": "Ship the slice",
+                        "specifications": [
+                            {
+                                "id": "spec-1",
+                                "sourceTaskSpecificationId": "task-spec-1",
+                                "type": "CUSTOM",
+                                "typeLabel": "Custom",
+                                "customTypeLabel": "Custom spec",
+                                "title": "Spec title",
+                                "deltaExplanation": "Explain delta",
+                                "before": "Before",
+                                "after": "After",
+                                "target": "Target",
+                                "rule": "Rule",
+                                "inferredFromPrecedent": False,
+                            },
+                        ],
                         "deploymentTargetLabel": "apps/itera",
                         "repositoryTarget": {
                             "provider": "GITHUB",
@@ -114,6 +130,22 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
                                 "position": 0,
                                 "title": "PR 1",
                                 "goal": "Ship the slice",
+                                "specifications": [
+                                    {
+                                        "id": "spec-1",
+                                        "sourceTaskSpecificationId": "task-spec-1",
+                                        "type": "CUSTOM",
+                                        "typeLabel": "Custom",
+                                        "customTypeLabel": "Custom spec",
+                                        "title": "Spec title",
+                                        "deltaExplanation": "Explain delta",
+                                        "before": "Before",
+                                        "after": "After",
+                                        "target": "Target",
+                                        "rule": "Rule",
+                                        "inferredFromPrecedent": False,
+                                    },
+                                ],
                                 "deploymentTargetLabel": "apps/itera",
                                 "allowedPathPrefixes": ["src"],
                                 "mainTouchPoints": ["backend", "frontend"],
@@ -170,6 +202,27 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
         self.assertEqual(result["execution"]["executionState"], "IMPLEMENTING")
         self.assertEqual(
             result["implementationContext"]["selectedPlannedPullRequest"]["id"], "pr-1"
+        )
+        self.assertEqual(
+            result["implementationContext"]["selectedPlannedPullRequest"][
+                "specifications"
+            ],
+            [
+                {
+                    "id": "spec-1",
+                    "sourceTaskSpecificationId": "task-spec-1",
+                    "type": "CUSTOM",
+                    "typeLabel": "Custom",
+                    "customTypeLabel": "Custom spec",
+                    "title": "Spec title",
+                    "deltaExplanation": "Explain delta",
+                    "before": "Before",
+                    "after": "After",
+                    "target": "Target",
+                    "rule": "Rule",
+                    "inferredFromPrecedent": False,
+                },
+            ],
         )
         self.assertEqual(
             result["implementationContext"]["currentPlan"]["id"],

@@ -25,15 +25,29 @@ query GetNextReadyPlannedPullRequestForTask($canonicalTaskId: IterationTaskCanon
       status
     }
     unavailableReason
-    plannedPullRequest {
-      id
-      position
-      title
-      goal
-      deploymentTargetLabel
-      repositoryTarget {
-        provider
-        owner
+      plannedPullRequest {
+        id
+        position
+        title
+        goal
+        specifications {
+          id
+          sourceTaskSpecificationId
+          type
+          typeLabel
+          customTypeLabel
+          title
+          deltaExplanation
+          before
+          after
+          target
+          rule
+          inferredFromPrecedent
+        }
+        deploymentTargetLabel
+        repositoryTarget {
+          provider
+          owner
         repoName
         mainBranchName
         basePath
@@ -68,14 +82,28 @@ query GetIterationTaskContext($taskId: IterationTaskID!) {
       pullRequests {
         id
         position
-        title
-        goal
-        deploymentTargetLabel
-        allowedPathPrefixes
-        mainTouchPoints
-        modelsToCreate
-        newApiContracts
-        repositoryTarget {
+                            title
+                            goal
+                            deploymentTargetLabel
+                            specifications {
+                              id
+                              sourceTaskSpecificationId
+                              type
+                              typeLabel
+                              customTypeLabel
+                              title
+                              deltaExplanation
+                              before
+                              after
+                              target
+                              rule
+                              inferredFromPrecedent
+                            }
+                            allowedPathPrefixes
+                            mainTouchPoints
+                            modelsToCreate
+                            newApiContracts
+                            repositoryTarget {
           provider
           owner
           repoName
@@ -178,6 +206,7 @@ def _build_pull_request_summary(
         "position": planned_pull_request.get("position"),
         "title": planned_pull_request.get("title"),
         "goal": planned_pull_request.get("goal"),
+        "specifications": planned_pull_request.get("specifications"),
         "deploymentTargetLabel": planned_pull_request.get("deploymentTargetLabel"),
         "allowedPathPrefixes": planned_pull_request.get("allowedPathPrefixes"),
         "mainTouchPoints": planned_pull_request.get("mainTouchPoints"),
