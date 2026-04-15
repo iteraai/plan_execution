@@ -28,6 +28,37 @@ class InstallSkillTests(unittest.TestCase):
                 "print('ok')\n",
             )
 
+    def test_install_skills_installs_discovered_catalog_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            skills_root = temp_path / "skills"
+            destination_root = temp_path / "installed"
+
+            for skill_name in [
+                "download-task-specification",
+                "download-pr-specification",
+            ]:
+                skill_dir = skills_root / skill_name
+                (skill_dir / "scripts").mkdir(parents=True)
+                (skill_dir / "SKILL.md").write_text(f"{skill_name}\n")
+                (skill_dir / "scripts" / "entry.py").write_text("print('ok')\n")
+
+            installed_paths = install.install_skills(
+                skills_root=skills_root,
+                destination_root=destination_root,
+            )
+
+            self.assertEqual(
+                [path.name for path in installed_paths],
+                ["download-pr-specification", "download-task-specification"],
+            )
+            self.assertTrue(
+                (destination_root / "download-task-specification" / "SKILL.md").exists()
+            )
+            self.assertTrue(
+                (destination_root / "download-pr-specification" / "SKILL.md").exists()
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

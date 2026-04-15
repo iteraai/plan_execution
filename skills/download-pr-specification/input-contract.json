@@ -1,0 +1,106 @@
+{
+  "name": "download-pr-specification",
+  "description": "Self-contained public skill that downloads the full build specification for a planned pull request within a canonical task.",
+  "version": "1.0.0",
+  "input": {
+    "type": "object",
+    "required": ["canonicalTaskId"],
+    "properties": {
+      "canonicalTaskId": {
+        "type": "string",
+        "pattern": "^[A-Z0-9]+-[1-9][0-9]*$",
+        "description": "Canonical Itera task ID (for example FRONTPAGE-42)."
+      },
+      "pullRequestPosition": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "1-based planned pull request position inside the task plan."
+      },
+      "plannedPullRequestId": {
+        "type": "string",
+        "description": "Explicit Itera planned pull request ID."
+      },
+      "outputFile": {
+        "type": "string",
+        "description": "Optional explicit JSON artifact path."
+      }
+    },
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": ["pullRequestPosition"]
+      },
+      {
+        "required": ["plannedPullRequestId"]
+      }
+    ]
+  },
+  "behavior": {
+    "installEntryPoint": "python3 install.py",
+    "sessionFile": "~/.codex/auth/plan_execution/iteraz.json",
+    "defaultOutputFile": "~/.codex/artifacts/plan_execution/specifications/planned_pull_requests/<canonical-task-id-lower>/pr-<position>.json",
+    "appHeader": "ITERAZ",
+    "platformHeader": "WEB",
+    "requiredGraphQLCalls": [
+      "sendEmailVerificationCode(email)",
+      "loginWithEmailMfa(identifier, code)",
+      "completeEmailLoginWithTotp(challengeId, code)",
+      "completeEmailLoginWithRecoveryCode(challengeId, code)",
+      "beginTotpEnrollment",
+      "confirmTotpEnrollment(code)",
+      "refreshToken(refreshToken)",
+      "socialMe",
+      "getIterationTaskByCanonicalId(canonicalId)"
+    ],
+    "outputContains": [
+      "full raw task payload",
+      "selected planned pull request",
+      "source task specification crosswalk",
+      "dependency context",
+      "repository hints"
+    ]
+  },
+  "output": {
+    "type": "object",
+    "required": [
+      "status",
+      "canonicalTaskId",
+      "snapshotFile"
+    ],
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "SUCCESS",
+          "AUTH_REQUIRED",
+          "LOGIN_FAILED",
+          "NOT_FOUND",
+          "NO_PLAN",
+          "PR_NOT_FOUND",
+          "UNAVAILABLE"
+        ]
+      },
+      "canonicalTaskId": {
+        "type": "string"
+      },
+      "snapshotFile": {
+        "type": ["string", "null"]
+      },
+      "plannedPullRequest": {
+        "type": ["object", "null"]
+      },
+      "task": {
+        "type": ["object", "null"]
+      },
+      "buildContext": {
+        "type": ["object", "null"]
+      },
+      "viewer": {
+        "type": ["object", "null"]
+      },
+      "message": {
+        "type": ["string", "null"]
+      }
+    }
+  }
+}

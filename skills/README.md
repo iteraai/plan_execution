@@ -7,5 +7,7 @@ As the repository grows, each skill can live in its own file or subdirectory wit
 ## Skills in this repo
 
 - `execute-approved-plan`: self-contained public skill that logs into Itera, selects the next dependency-ready planned pull request for a canonical task ID, and claims it.
+- `download-task-specification`: self-contained public skill that downloads the full task specification and coding context for a canonical task ID.
+- `download-pr-specification`: self-contained public skill that downloads the full build specification for a planned pull request within a canonical task.
 
 Use `skills/README.md` (this file) to discover local catalog entries and `skills/execute-approved-plan/README.md` (or `SKILL.md`) for install, auth, and runtime details.

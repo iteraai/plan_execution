@@ -1,0 +1,84 @@
+{
+  "name": "download-task-specification",
+  "description": "Self-contained public skill that downloads the full Itera task specification and coding context for a canonical task ID.",
+  "version": "1.0.0",
+  "input": {
+    "type": "object",
+    "required": ["canonicalTaskId"],
+    "properties": {
+      "canonicalTaskId": {
+        "type": "string",
+        "pattern": "^[A-Z0-9]+-[1-9][0-9]*$",
+        "description": "Canonical Itera task ID (for example FRONTPAGE-42)."
+      },
+      "outputFile": {
+        "type": "string",
+        "description": "Optional explicit JSON artifact path."
+      }
+    },
+    "additionalProperties": false
+  },
+  "behavior": {
+    "installEntryPoint": "python3 install.py",
+    "sessionFile": "~/.codex/auth/plan_execution/iteraz.json",
+    "defaultOutputFile": "~/.codex/artifacts/plan_execution/specifications/tasks/<canonical-task-id-lower>.json",
+    "appHeader": "ITERAZ",
+    "platformHeader": "WEB",
+    "requiredGraphQLCalls": [
+      "sendEmailVerificationCode(email)",
+      "loginWithEmailMfa(identifier, code)",
+      "completeEmailLoginWithTotp(challengeId, code)",
+      "completeEmailLoginWithRecoveryCode(challengeId, code)",
+      "beginTotpEnrollment",
+      "confirmTotpEnrollment(code)",
+      "refreshToken(refreshToken)",
+      "socialMe",
+      "getIterationTaskByCanonicalId(canonicalId)"
+    ],
+    "outputContains": [
+      "full raw task payload",
+      "enriched current plan context",
+      "repository hints",
+      "task run history",
+      "task specifications and questions"
+    ]
+  },
+  "output": {
+    "type": "object",
+    "required": [
+      "status",
+      "canonicalTaskId",
+      "snapshotFile"
+    ],
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "SUCCESS",
+          "AUTH_REQUIRED",
+          "LOGIN_FAILED",
+          "NOT_FOUND",
+          "UNAVAILABLE"
+        ]
+      },
+      "canonicalTaskId": {
+        "type": "string"
+      },
+      "snapshotFile": {
+        "type": ["string", "null"]
+      },
+      "task": {
+        "type": ["object", "null"]
+      },
+      "buildContext": {
+        "type": ["object", "null"]
+      },
+      "viewer": {
+        "type": ["object", "null"]
+      },
+      "message": {
+        "type": ["string", "null"]
+      }
+    }
+  }
+}
