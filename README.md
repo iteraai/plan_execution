@@ -12,11 +12,14 @@ The repository starts as a public skills collection. CLI-related code can be add
 
 Run `python3 install.py`.
 
-The installer copies `skills/execute-approved-plan/` into `~/.codex/skills/execute-approved-plan` so end users can use the skill without installing any other local skill.
+The installer copies every bundled skill into `~/.codex/skills/<skill-name>` so end
+users can use them without installing any other local skill.
 
 ## Available skills
 
 - [`execute-approved-plan`](skills/execute-approved-plan/): start execution for the next dependency-ready planned pull request using a canonical task ID.
+- [`download-task-specification`](skills/download-task-specification/): download the full task specification and coding context for a canonical task ID.
+- [`download-pr-specification`](skills/download-pr-specification/): download the full build specification for a planned pull request within a canonical task.
 
 ## Available skill APIs
 
@@ -30,12 +33,32 @@ The installer copies `skills/execute-approved-plan/` into `~/.codex/skills/execu
 - explicit unavailable states and deterministic branch suggestion
 - current execution state and planned-pull-request metadata
 
+### `download-task-specification`
+
+- `canonicalTaskId` input (for example `FRONTPAGE-42`)
+- self-bootstrapped Itera login using `App: ITERAZ` and `Platform: WEB`
+- stored refreshable session at `~/.codex/auth/plan_execution/iteraz.json`
+- `getIterationTaskByCanonicalId(canonicalId)` query
+- raw task payload plus derived build context for coding
+- default JSON artifact at `~/.codex/artifacts/plan_execution/specifications/tasks/<canonical-task-id-lower>.json`
+
+### `download-pr-specification`
+
+- `canonicalTaskId` plus `pullRequestPosition` or `plannedPullRequestId`
+- self-bootstrapped Itera login using `App: ITERAZ` and `Platform: WEB`
+- stored refreshable session at `~/.codex/auth/plan_execution/iteraz.json`
+- `getIterationTaskByCanonicalId(canonicalId)` query with full plan context
+- selected planned-pull-request snapshot plus source task specification crosswalk
+- default JSON artifact under `~/.codex/artifacts/plan_execution/specifications/planned_pull_requests/`
+
 ## Bundled runtime scripts
 
 - `skills/execute-approved-plan/scripts/auth_login.py`
 - `skills/execute-approved-plan/scripts/auth_refresh.py`
 - `skills/execute-approved-plan/scripts/graphql_client.py`
 - `skills/execute-approved-plan/scripts/execute_approved_plan.py`
+- `skills/download-task-specification/scripts/download_task_specification.py`
+- `skills/download-pr-specification/scripts/download_pr_specification.py`
 
 ## Plan execution flow at a glance
 
