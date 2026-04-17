@@ -205,10 +205,15 @@ def _complete_totp_enrollment(
     username: str,
     config: graphql_client.GraphQLRequestConfig,
 ) -> dict[str, Any]:
-    enrollment = _begin_totp_enrollment(restricted_token, config=config)
+    _begin_totp_enrollment(restricted_token, config=config)
     print("TOTP enrollment is required for this account.", file=sys.stderr)
-    print(f"Secret: {enrollment['secret']}", file=sys.stderr)
-    print(f"otpauthUri: {enrollment['otpauthUri']}", file=sys.stderr)
+    print(
+        "Set up this account in your authenticator app using a trusted local "
+        "workflow, then enter the first TOTP code below. The enrollment secret, "
+        "otpauth URI, and recovery codes are intentionally not printed by this "
+        "tool.",
+        file=sys.stderr,
+    )
 
     code = _prompt_value("First TOTP code", secret=True)
     confirmed = _confirm_totp_enrollment(restricted_token, code, config=config)
@@ -216,9 +221,12 @@ def _complete_totp_enrollment(
     if not auth:
         raise RuntimeError("TOTP enrollment did not return upgraded auth tokens")
 
-    print("Recovery codes:", file=sys.stderr)
-    for recovery_code in confirmed.get("recoveryCodes", []):
-        print(recovery_code, file=sys.stderr)
+    if confirmed.get("recoveryCodes"):
+        print(
+            "Recovery codes were generated for this account, but they are "
+            "intentionally not printed by this tool.",
+            file=sys.stderr,
+        )
 
     return auth_refresh.build_session(
         account_email=email,
