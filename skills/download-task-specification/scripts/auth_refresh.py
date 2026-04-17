@@ -50,6 +50,13 @@ REQUIRED_SESSION_KEYS = {
     "refresh_token",
     "rotated_at",
 }
+PRIVATE_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR
+WINDOWS_PERMISSION_FALLBACK_WARNING = (
+    "Windows local file protection falls back to inherited directory ACLs; "
+    "this script does not rewrite Windows ACLs, so token and artifact privacy "
+    "depends on the parent directory permissions."
+)
+_warned_about_windows_permission_fallback = False
 
 
 def utc_now() -> str:
@@ -70,6 +77,26 @@ def load_session(session_file: Path = DEFAULT_SESSION_FILE) -> dict[str, Any]:
     return payload
 
 
+def warn_about_windows_permission_fallback() -> None:
+    global _warned_about_windows_permission_fallback
+    if _warned_about_windows_permission_fallback:
+        return
+    print(WINDOWS_PERMISSION_FALLBACK_WARNING, file=sys.stderr)
+    _warned_about_windows_permission_fallback = True
+
+
+def is_windows_platform() -> bool:
+    return os.name == "nt"
+
+
+def protect_local_file(path: Path) -> None:
+    """Restrict a local file as much as this platform can reliably support."""
+    if is_windows_platform():
+        warn_about_windows_permission_fallback()
+        return
+    os.chmod(path, PRIVATE_FILE_MODE)
+
+
 def write_session(session_file: Path, payload: dict[str, Any]) -> None:
     session_file.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -80,11 +107,11 @@ def write_session(session_file: Path, payload: dict[str, Any]) -> None:
         delete=False,
     ) as handle:
         temp_path = Path(handle.name)
-        os.chmod(temp_path, stat.S_IRUSR | stat.S_IWUSR)
+        protect_local_file(temp_path)
         json.dump(payload, handle, indent=2)
         handle.write("\n")
     os.replace(temp_path, session_file)
-    os.chmod(session_file, stat.S_IRUSR | stat.S_IWUSR)
+    protect_local_file(session_file)
 
 
 def build_session(
