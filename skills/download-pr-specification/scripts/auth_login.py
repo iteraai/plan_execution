@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from getpass import getpass
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -86,6 +87,26 @@ def _prompt_value(
         if value or allow_empty:
             return value
         print("A value is required.", file=sys.stderr)
+
+
+def _open_sensitive_display():
+    candidate_paths = ("CONOUT$",) if os.name == "nt" else ("/dev/tty",)
+    for candidate_path in candidate_paths:
+        try:
+            return open(candidate_path, "w", encoding="utf-8")
+        except OSError:
+            continue
+    raise RuntimeError(
+        "TOTP enrollment requires an interactive terminal so enrollment details "
+        "can be shown without writing them to stdout or stderr."
+    )
+
+
+def _write_sensitive_lines(lines: list[str]) -> None:
+    with _open_sensitive_display() as display:
+        for line in lines:
+            print(line, file=display)
+        display.flush()
 
 
 def _send_email_verification_code(
@@ -207,8 +228,19 @@ def _complete_totp_enrollment(
 ) -> dict[str, Any]:
     enrollment = _begin_totp_enrollment(restricted_token, config=config)
     print("TOTP enrollment is required for this account.", file=sys.stderr)
-    print(f"Secret: {enrollment['secret']}", file=sys.stderr)
-    print(f"otpauthUri: {enrollment['otpauthUri']}", file=sys.stderr)
+    print(
+        "The enrollment secret and recovery codes will be shown only in your "
+        "interactive terminal, not in stdout or stderr logs.",
+        file=sys.stderr,
+    )
+    _write_sensitive_lines(
+        [
+            "TOTP enrollment details:",
+            f"Secret: {enrollment['secret']}",
+            f"otpauthUri: {enrollment['otpauthUri']}",
+            "Store these values securely before continuing.",
+        ]
+    )
 
     code = _prompt_value("First TOTP code", secret=True)
     confirmed = _confirm_totp_enrollment(restricted_token, code, config=config)
@@ -216,9 +248,14 @@ def _complete_totp_enrollment(
     if not auth:
         raise RuntimeError("TOTP enrollment did not return upgraded auth tokens")
 
-    print("Recovery codes:", file=sys.stderr)
-    for recovery_code in confirmed.get("recoveryCodes", []):
-        print(recovery_code, file=sys.stderr)
+    if confirmed.get("recoveryCodes"):
+        _write_sensitive_lines(
+            [
+                "Recovery codes:",
+                *confirmed["recoveryCodes"],
+                "Store these codes securely.",
+            ]
+        )
 
     return auth_refresh.build_session(
         account_email=email,
