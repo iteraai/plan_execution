@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import stat
 import sys
 import tempfile
 import unittest
@@ -211,6 +213,11 @@ def _build_task_payload() -> dict[str, object]:
 
 
 class DownloadPrSpecificationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        download_pr_specification.auth_refresh._warned_about_windows_permission_fallback = (
+            False
+        )
+
     @mock.patch("download_pr_specification.ensure_authenticated_context")
     @mock.patch("download_pr_specification.graphql_client.execute_graphql")
     def test_run_download_selects_pr_and_crosswalks_source_specs(
@@ -250,6 +257,12 @@ class DownloadPrSpecificationTests(unittest.TestCase):
             )
             self.assertEqual(result["snapshotFile"], str(output_file))
             self.assertTrue(output_file.exists())
+            if os.name != "nt":
+                mode = stat.S_IMODE(output_file.stat().st_mode)
+                self.assertEqual(
+                    mode,
+                    download_pr_specification.auth_refresh.PRIVATE_FILE_MODE,
+                )
 
     @mock.patch("download_pr_specification.ensure_authenticated_context")
     @mock.patch("download_pr_specification.graphql_client.execute_graphql")
@@ -277,6 +290,33 @@ class DownloadPrSpecificationTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "PR_NOT_FOUND")
         self.assertIsNone(result["plannedPullRequest"])
+
+    @mock.patch("download_pr_specification.auth_refresh.warnings.warn")
+    @mock.patch("download_pr_specification.auth_refresh.os.chmod")
+    def test_write_json_artifact_warns_about_inherited_windows_acls(
+        self,
+        chmod: mock.Mock,
+        warn: mock.Mock,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_file = Path(temp_dir) / "pr.json"
+            with mock.patch(
+                "download_pr_specification.auth_refresh.is_windows_platform",
+                return_value=True,
+            ):
+                download_pr_specification.write_json_artifact(
+                    output_file,
+                    {"canonicalTaskId": "FRONTPAGE-42", "pullRequestId": "pr-2"},
+                )
+            self.assertTrue(output_file.exists())
+
+        chmod.assert_not_called()
+        warn.assert_called_once()
+        self.assertEqual(
+            warn.call_args.args[0],
+            download_pr_specification.auth_refresh.WINDOWS_PERMISSION_FALLBACK_WARNING,
+        )
+        self.assertIs(warn.call_args.args[1], RuntimeWarning)
 
 
 if __name__ == "__main__":

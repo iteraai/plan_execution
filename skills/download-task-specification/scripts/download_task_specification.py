@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import stat
 import sys
 import tempfile
 from typing import Any
@@ -500,11 +499,11 @@ def write_json_artifact(output_file: Path, payload: dict[str, Any]) -> None:
         delete=False,
     ) as handle:
         temp_path = Path(handle.name)
-        os.chmod(temp_path, stat.S_IRUSR | stat.S_IWUSR)
+        auth_refresh.protect_local_file(temp_path)
         json.dump(payload, handle, indent=2)
         handle.write("\n")
     os.replace(temp_path, output_file)
-    os.chmod(output_file, stat.S_IRUSR | stat.S_IWUSR)
+    auth_refresh.protect_local_file(output_file)
 
 
 def ensure_authenticated_context(

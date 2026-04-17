@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import stat
 import sys
@@ -17,6 +18,13 @@ import auth_refresh
 
 
 class AuthRefreshTests(unittest.TestCase):
+    def setUp(self) -> None:
+        auth_refresh._warned_about_windows_permission_fallback = False
+
+    @unittest.skipIf(
+        os.name == "nt",
+        "POSIX chmod semantics are not available on Windows.",
+    )
     def test_write_session_sets_0600_permissions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             session_file = Path(temp_dir) / "iteraz.json"
@@ -30,7 +38,34 @@ class AuthRefreshTests(unittest.TestCase):
             auth_refresh.write_session(session_file, payload)
 
             mode = stat.S_IMODE(session_file.stat().st_mode)
-            self.assertEqual(mode, stat.S_IRUSR | stat.S_IWUSR)
+            self.assertEqual(mode, auth_refresh.PRIVATE_FILE_MODE)
+
+    @mock.patch("auth_refresh.warnings.warn")
+    @mock.patch("auth_refresh.os.chmod")
+    def test_write_session_warns_about_inherited_windows_acls(
+        self,
+        chmod: mock.Mock,
+        warn: mock.Mock,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            session_file = Path(temp_dir) / "iteraz.json"
+            payload = auth_refresh.build_session(
+                account_email="thor@example.com",
+                username="thor",
+                token="token-1",
+                refresh_token="refresh-1",
+            )
+
+            with mock.patch("auth_refresh.is_windows_platform", return_value=True):
+                auth_refresh.write_session(session_file, payload)
+
+        chmod.assert_not_called()
+        warn.assert_called_once()
+        self.assertEqual(
+            warn.call_args.args[0],
+            auth_refresh.WINDOWS_PERMISSION_FALLBACK_WARNING,
+        )
+        self.assertIs(warn.call_args.args[1], RuntimeWarning)
 
     @mock.patch("auth_refresh.graphql_client.execute_graphql")
     def test_refresh_session_rotates_tokens(self, execute_graphql: mock.Mock) -> None:
