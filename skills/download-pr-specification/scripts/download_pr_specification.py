@@ -562,7 +562,9 @@ def write_binary_artifact(output_file: Path, payload: bytes) -> None:
 
 
 def _prototype_patch_artifact_directory(snapshot_path: Path) -> Path:
-    return snapshot_path.parent / f"{snapshot_path.stem}.artifacts" / "prototype-patches"
+    return (
+        snapshot_path.parent / f"{snapshot_path.stem}.artifacts" / "prototype-patches"
+    )
 
 
 def _merge_reference_provenance(
@@ -639,9 +641,7 @@ def _build_prototype_code_artifacts(
                 "prototypeHandoffArtifactId": prototype_reference.get(
                     "prototypeHandoffArtifactId"
                 ),
-                "prototypeIterationId": prototype_reference.get(
-                    "prototypeIterationId"
-                ),
+                "prototypeIterationId": prototype_reference.get("prototypeIterationId"),
                 "checkpointId": prototype_reference.get("checkpointId"),
                 "references": list(prototype_reference.get("references") or []),
                 "usedBySpecificationIds": [],
@@ -672,7 +672,9 @@ def _build_prototype_code_artifacts(
                 token=token,
                 config=config,
             )
-            with request.urlopen(download_url, timeout=config.timeout_seconds) as response:
+            with request.urlopen(
+                download_url, timeout=config.timeout_seconds
+            ) as response:
                 payload = response.read()
             local_path = artifact_directory / _prototype_patch_filename(artifact)
             write_binary_artifact(local_path, payload)

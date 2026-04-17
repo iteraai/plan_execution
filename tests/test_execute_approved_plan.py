@@ -234,7 +234,11 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
         execute_graphql.side_effect = [
             _build_next_ready_payload(specifications=copy.deepcopy(specifications)),
             _build_task_context_payload(specifications=copy.deepcopy(specifications)),
-            {"generateDownloadInformation": {"url": "https://downloads.example/media-123"}},
+            {
+                "generateDownloadInformation": {
+                    "url": "https://downloads.example/media-123"
+                }
+            },
             _build_claimed_pr_payload(),
         ]
         urlopen.return_value = _mock_http_response(b"diff --git a/skill b/skill\n")
@@ -268,7 +272,10 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
                 self.assertEqual(artifact["downloadStatus"], "DOWNLOADED")
                 self.assertEqual(artifact["localPath"], str(expected_patch))
                 self.assertEqual(artifact["usedBySpecificationIds"], ["spec-1"])
-                self.assertEqual(result["prototypeCodeArtifacts"][0]["localPath"], str(expected_patch))
+                self.assertEqual(
+                    result["prototypeCodeArtifacts"][0]["localPath"],
+                    str(expected_patch),
+                )
 
     @mock.patch("execute_approved_plan.ensure_authenticated_context")
     @mock.patch("execute_approved_plan.graphql_client.execute_graphql")
@@ -328,7 +335,11 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
         execute_graphql.side_effect = [
             _build_next_ready_payload(specifications=copy.deepcopy(specifications)),
             _build_task_context_payload(specifications=copy.deepcopy(specifications)),
-            {"generateDownloadInformation": {"url": "https://downloads.example/media-404"}},
+            {
+                "generateDownloadInformation": {
+                    "url": "https://downloads.example/media-404"
+                }
+            },
             _build_claimed_pr_payload(),
         ]
         urlopen.side_effect = OSError("download failed")

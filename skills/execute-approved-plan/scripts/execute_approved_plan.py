@@ -316,9 +316,7 @@ def _build_prototype_code_artifacts(
                 "prototypeHandoffArtifactId": prototype_reference.get(
                     "prototypeHandoffArtifactId"
                 ),
-                "prototypeIterationId": prototype_reference.get(
-                    "prototypeIterationId"
-                ),
+                "prototypeIterationId": prototype_reference.get("prototypeIterationId"),
                 "checkpointId": prototype_reference.get("checkpointId"),
                 "references": list(prototype_reference.get("references") or []),
                 "usedBySpecificationIds": [],

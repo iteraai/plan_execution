@@ -289,7 +289,11 @@ class DownloadPrSpecificationTests(unittest.TestCase):
         )
         execute_graphql.side_effect = [
             {"getIterationTaskByCanonicalId": task_payload},
-            {"generateDownloadInformation": {"url": "https://downloads.example/media-123"}},
+            {
+                "generateDownloadInformation": {
+                    "url": "https://downloads.example/media-123"
+                }
+            },
         ]
         urlopen.return_value = _mock_http_response(b"diff --git a/ui b/ui\n")
 
@@ -361,7 +365,11 @@ class DownloadPrSpecificationTests(unittest.TestCase):
         )
         execute_graphql.side_effect = [
             {"getIterationTaskByCanonicalId": task_payload},
-            {"generateDownloadInformation": {"url": "https://downloads.example/media-555"}},
+            {
+                "generateDownloadInformation": {
+                    "url": "https://downloads.example/media-555"
+                }
+            },
         ]
         urlopen.return_value = _mock_http_response(b"patch payload")
 
@@ -442,7 +450,11 @@ class DownloadPrSpecificationTests(unittest.TestCase):
         )
         execute_graphql.side_effect = [
             {"getIterationTaskByCanonicalId": task_payload},
-            {"generateDownloadInformation": {"url": "https://downloads.example/media-404"}},
+            {
+                "generateDownloadInformation": {
+                    "url": "https://downloads.example/media-404"
+                }
+            },
         ]
         urlopen.side_effect = OSError("download failed")
 
