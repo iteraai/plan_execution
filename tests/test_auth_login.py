@@ -99,8 +99,10 @@ class AuthLoginTests(unittest.TestCase):
     @mock.patch("auth_login.auth_refresh.write_session")
     @mock.patch("auth_login.graphql_client.execute_graphql")
     @mock.patch("auth_login._prompt_value")
+    @mock.patch("auth_login._write_sensitive_lines")
     def test_login_interactively_enrollment_does_not_log_secrets(
         self,
+        write_sensitive_lines: mock.Mock,
         prompt_value: mock.Mock,
         execute_graphql: mock.Mock,
         write_session: mock.Mock,
@@ -151,13 +153,23 @@ class AuthLoginTests(unittest.TestCase):
         self.assertIn(
             "TOTP enrollment is required for this account.", stderr.getvalue()
         )
-        self.assertIn("intentionally not printed by this tool", stderr.getvalue())
+        self.assertIn("interactive terminal", stderr.getvalue())
         self.assertNotIn("VERY-SECRET", stderr.getvalue())
         self.assertNotIn(
             "otpauth://totp/Itera:thor?secret=VERY-SECRET", stderr.getvalue()
         )
         self.assertNotIn("code-one", stderr.getvalue())
         self.assertNotIn("code-two", stderr.getvalue())
+        self.assertEqual(write_sensitive_lines.call_count, 2)
+        enrollment_lines = write_sensitive_lines.call_args_list[0].args[0]
+        recovery_lines = write_sensitive_lines.call_args_list[1].args[0]
+        self.assertIn("VERY-SECRET", "\n".join(enrollment_lines))
+        self.assertIn(
+            "otpauth://totp/Itera:thor?secret=VERY-SECRET",
+            "\n".join(enrollment_lines),
+        )
+        self.assertIn("code-one", "\n".join(recovery_lines))
+        self.assertIn("code-two", "\n".join(recovery_lines))
         write_session.assert_called_once()
 
     def test_auth_login_script_copies_stay_in_sync(self) -> None:
