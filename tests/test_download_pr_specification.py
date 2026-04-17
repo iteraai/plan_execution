@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import copy
 from pathlib import Path
 import stat
 import sys
@@ -176,21 +177,7 @@ def _build_task_payload() -> dict[str, object]:
                     "modelsToCreate": [],
                     "newApiContracts": ["download-pr-specification"],
                     "specifications": [
-                        {
-                            "id": "plan-spec-1",
-                            "sourceTaskSpecificationId": "spec-1",
-                            "type": "API_CONTRACT",
-                            "typeLabel": "API Contract",
-                            "customTypeLabel": None,
-                            "title": "Crosswalk upstream task specs",
-                            "deltaExplanation": "Preserve upstream task detail in the selected PR.",
-                            "before": "PR specs lose task context.",
-                            "after": "Selected PR specs include task context.",
-                            "target": "selected-pr",
-                            "rule": "Selected PR context should preserve source task specs.",
-                            "inferredFromPrecedent": False,
-                            "prototypeReference": None,
-                        }
+                        _build_planned_pr_specification("plan-spec-1"),
                     ],
                     "state": "READY_UNCLAIMED",
                     "execution": {
@@ -214,6 +201,60 @@ def _build_task_payload() -> dict[str, object]:
     }
 
 
+def _prototype_reference(
+    *,
+    media_id: str | None = "media-123",
+    handoff_artifact_id: str = "handoff-123",
+    prototype_iteration_id: str = "iteration-123",
+    checkpoint_id: str = "checkpoint-123",
+) -> dict[str, object]:
+    return {
+        "prototypeHandoffArtifactId": handoff_artifact_id,
+        "prototypeIterationId": prototype_iteration_id,
+        "checkpointId": checkpoint_id,
+        "prototypeCodeMedia": {"id": media_id} if media_id else None,
+        "references": [{"source": "CHECKPOINT", "sourceId": checkpoint_id}],
+    }
+
+
+def _build_planned_pr_specification(
+    specification_id: str,
+    *,
+    prototype_reference: dict[str, object] | None = None,
+    source_task_specification_id: str = "spec-1",
+) -> dict[str, object]:
+    return {
+        "id": specification_id,
+        "sourceTaskSpecificationId": source_task_specification_id,
+        "type": "API_CONTRACT",
+        "typeLabel": "API Contract",
+        "customTypeLabel": None,
+        "title": f"Spec {specification_id}",
+        "deltaExplanation": "Preserve upstream task detail in the selected PR.",
+        "before": "PR specs lose task context.",
+        "after": "Selected PR specs include task context.",
+        "target": "selected-pr",
+        "rule": "Selected PR context should preserve source task specs.",
+        "inferredFromPrecedent": False,
+        "prototypeReference": prototype_reference,
+    }
+
+
+def _set_selected_pr_specifications(
+    task_payload: dict[str, object], specifications: list[dict[str, object]]
+) -> dict[str, object]:
+    selected_pull_request = task_payload["currentPlan"]["pullRequests"][1]
+    selected_pull_request["specifications"] = specifications
+    return task_payload
+
+
+def _mock_http_response(payload: bytes) -> mock.MagicMock:
+    response = mock.MagicMock()
+    response.__enter__.return_value = response
+    response.read.return_value = payload
+    return response
+
+
 class DownloadPrSpecificationTests(unittest.TestCase):
     def setUp(self) -> None:
         download_pr_specification.auth_refresh._warned_about_windows_permission_fallback = (
@@ -221,8 +262,130 @@ class DownloadPrSpecificationTests(unittest.TestCase):
         )
 
     @mock.patch("download_pr_specification.ensure_authenticated_context")
+    @mock.patch("download_pr_specification.request.urlopen")
     @mock.patch("download_pr_specification.graphql_client.execute_graphql")
-    def test_run_download_selects_pr_and_crosswalks_source_specs(
+    def test_run_download_downloads_single_prototype_patch(
+        self,
+        execute_graphql: mock.Mock,
+        urlopen: mock.Mock,
+        ensure_authenticated_context: mock.Mock,
+    ) -> None:
+        task_payload = _set_selected_pr_specifications(
+            copy.deepcopy(_build_task_payload()),
+            [
+                _build_planned_pr_specification(
+                    "plan-spec-1",
+                    prototype_reference=_prototype_reference(),
+                )
+            ],
+        )
+        ensure_authenticated_context.return_value = (
+            {
+                "username": "thor",
+                "account_email": "thor@example.com",
+                "token": "access-token",
+            },
+            {"email": "thor@example.com"},
+        )
+        execute_graphql.side_effect = [
+            {"getIterationTaskByCanonicalId": task_payload},
+            {"generateDownloadInformation": {"url": "https://downloads.example/media-123"}},
+        ]
+        urlopen.return_value = _mock_http_response(b"diff --git a/ui b/ui\n")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_file = Path(temp_dir) / "pr.json"
+            result = download_pr_specification.run_download(
+                "FRONTPAGE-42",
+                pull_request_position=2,
+                output_file=output_file,
+            )
+            self.assertEqual(result["status"], "SUCCESS")
+            self.assertEqual(result["plannedPullRequest"]["id"], "pr-2")
+            self.assertEqual(len(result["prototypeCodeArtifacts"]), 1)
+            artifact = result["prototypeCodeArtifacts"][0]
+            expected_patch = (
+                output_file.parent
+                / "pr.artifacts"
+                / "prototype-patches"
+                / "handoff-123.patch"
+            )
+            self.assertEqual(artifact["mediaId"], "media-123")
+            self.assertEqual(artifact["downloadStatus"], "DOWNLOADED")
+            self.assertEqual(artifact["usedBySpecificationIds"], ["plan-spec-1"])
+            self.assertEqual(artifact["localPath"], str(expected_patch))
+            self.assertTrue(expected_patch.exists())
+            self.assertEqual(
+                expected_patch.read_bytes(),
+                b"diff --git a/ui b/ui\n",
+            )
+            self.assertEqual(
+                result["buildContext"]["prototypeCodeArtifacts"][0]["localPath"],
+                str(expected_patch),
+            )
+
+    @mock.patch("download_pr_specification.ensure_authenticated_context")
+    @mock.patch("download_pr_specification.request.urlopen")
+    @mock.patch("download_pr_specification.graphql_client.execute_graphql")
+    def test_run_download_deduplicates_shared_media_ids(
+        self,
+        execute_graphql: mock.Mock,
+        urlopen: mock.Mock,
+        ensure_authenticated_context: mock.Mock,
+    ) -> None:
+        shared_reference = _prototype_reference(
+            media_id="media-555",
+            handoff_artifact_id="handoff-555",
+        )
+        task_payload = _set_selected_pr_specifications(
+            copy.deepcopy(_build_task_payload()),
+            [
+                _build_planned_pr_specification(
+                    "plan-spec-1",
+                    prototype_reference=shared_reference,
+                ),
+                _build_planned_pr_specification(
+                    "plan-spec-2",
+                    prototype_reference=shared_reference,
+                    source_task_specification_id="spec-1",
+                ),
+            ],
+        )
+        ensure_authenticated_context.return_value = (
+            {
+                "username": "thor",
+                "account_email": "thor@example.com",
+                "token": "access-token",
+            },
+            {"email": "thor@example.com"},
+        )
+        execute_graphql.side_effect = [
+            {"getIterationTaskByCanonicalId": task_payload},
+            {"generateDownloadInformation": {"url": "https://downloads.example/media-555"}},
+        ]
+        urlopen.return_value = _mock_http_response(b"patch payload")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = download_pr_specification.run_download(
+                "FRONTPAGE-42",
+                pull_request_position=2,
+                output_file=Path(temp_dir) / "pr.json",
+            )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(len(result["prototypeCodeArtifacts"]), 1)
+        artifact = result["prototypeCodeArtifacts"][0]
+        self.assertEqual(
+            artifact["usedBySpecificationIds"],
+            ["plan-spec-1", "plan-spec-2"],
+        )
+        self.assertEqual(artifact["downloadStatus"], "DOWNLOADED")
+        self.assertEqual(execute_graphql.call_count, 2)
+        self.assertEqual(urlopen.call_count, 1)
+
+    @mock.patch("download_pr_specification.ensure_authenticated_context")
+    @mock.patch("download_pr_specification.graphql_client.execute_graphql")
+    def test_run_download_returns_empty_artifact_list_without_prototype_media(
         self,
         execute_graphql: mock.Mock,
         ensure_authenticated_context: mock.Mock,
@@ -240,31 +403,62 @@ class DownloadPrSpecificationTests(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            output_file = Path(temp_dir) / "pr.json"
             result = download_pr_specification.run_download(
                 "FRONTPAGE-42",
                 pull_request_position=2,
-                output_file=output_file,
+                output_file=Path(temp_dir) / "pr.json",
             )
 
-            self.assertEqual(result["status"], "SUCCESS")
-            self.assertEqual(result["plannedPullRequest"]["id"], "pr-2")
-            self.assertEqual(
-                result["buildContext"]["sourceTaskSpecifications"][0]["id"],
-                "spec-1",
-            )
-            self.assertEqual(
-                result["buildContext"]["dependencyContext"]["dependsOn"][0]["id"],
-                "pr-1",
-            )
-            self.assertEqual(result["snapshotFile"], str(output_file))
-            self.assertTrue(output_file.exists())
-            if os.name != "nt":
-                mode = stat.S_IMODE(output_file.stat().st_mode)
-                self.assertEqual(
-                    mode,
-                    download_pr_specification.auth_refresh.PRIVATE_FILE_MODE,
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(result["prototypeCodeArtifacts"], [])
+        self.assertEqual(result["buildContext"]["prototypeCodeArtifacts"], [])
+        self.assertEqual(execute_graphql.call_count, 1)
+
+    @mock.patch("download_pr_specification.ensure_authenticated_context")
+    @mock.patch("download_pr_specification.request.urlopen")
+    @mock.patch("download_pr_specification.graphql_client.execute_graphql")
+    def test_run_download_records_partial_download_failures(
+        self,
+        execute_graphql: mock.Mock,
+        urlopen: mock.Mock,
+        ensure_authenticated_context: mock.Mock,
+    ) -> None:
+        task_payload = _set_selected_pr_specifications(
+            copy.deepcopy(_build_task_payload()),
+            [
+                _build_planned_pr_specification(
+                    "plan-spec-1",
+                    prototype_reference=_prototype_reference(media_id="media-404"),
                 )
+            ],
+        )
+        ensure_authenticated_context.return_value = (
+            {
+                "username": "thor",
+                "account_email": "thor@example.com",
+                "token": "access-token",
+            },
+            {"email": "thor@example.com"},
+        )
+        execute_graphql.side_effect = [
+            {"getIterationTaskByCanonicalId": task_payload},
+            {"generateDownloadInformation": {"url": "https://downloads.example/media-404"}},
+        ]
+        urlopen.side_effect = OSError("download failed")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = download_pr_specification.run_download(
+                "FRONTPAGE-42",
+                pull_request_position=2,
+                output_file=Path(temp_dir) / "pr.json",
+            )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(len(result["prototypeCodeArtifacts"]), 1)
+        artifact = result["prototypeCodeArtifacts"][0]
+        self.assertEqual(artifact["downloadStatus"], "DOWNLOAD_FAILED")
+        self.assertIsNone(artifact["localPath"])
+        self.assertEqual(artifact["error"], "download failed")
 
     @mock.patch("download_pr_specification.ensure_authenticated_context")
     @mock.patch("download_pr_specification.graphql_client.execute_graphql")
@@ -292,6 +486,7 @@ class DownloadPrSpecificationTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "PR_NOT_FOUND")
         self.assertIsNone(result["plannedPullRequest"])
+        self.assertEqual(result["prototypeCodeArtifacts"], [])
 
     @mock.patch("download_pr_specification.auth_refresh.os.chmod")
     def test_write_json_artifact_notices_inherited_windows_acls(

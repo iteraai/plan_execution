@@ -14,6 +14,13 @@ DEFAULT_GRAPHQL_URL = os.environ.get(
 DEFAULT_APP_HEADER = "ITERAZ"
 DEFAULT_PLATFORM_HEADER = "WEB"
 DEFAULT_TIMEOUT_SECONDS = float(os.environ.get("ITERA_GRAPHQL_TIMEOUT_SECONDS", "30"))
+GENERATE_DOWNLOAD_INFORMATION_MUTATION = """
+mutation GenerateDownloadInformation($media: MediaID!) {
+  generateDownloadInformation(media: $media) {
+    url
+  }
+}
+""".strip()
 
 
 @dataclass(frozen=True)
@@ -106,3 +113,25 @@ def execute_graphql(
         )
 
     return response_payload["data"]
+
+
+def generate_download_information(
+    media: str,
+    *,
+    token: str | None = None,
+    config: GraphQLRequestConfig | None = None,
+) -> str:
+    response = execute_graphql(
+        GENERATE_DOWNLOAD_INFORMATION_MUTATION,
+        {"media": media},
+        token=token,
+        config=config,
+    )
+    download_information = response.get("generateDownloadInformation") or {}
+    url = download_information.get("url")
+    if not url:
+        raise GraphQLError(
+            "GraphQL response was missing download URL",
+            payload=response,
+        )
+    return str(url)

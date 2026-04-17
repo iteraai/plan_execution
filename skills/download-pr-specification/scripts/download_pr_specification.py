@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 import tempfile
 from typing import Any
+from urllib import request
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -150,6 +151,9 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
           prototypeHandoffArtifactId
           prototypeIterationId
           checkpointId
+          prototypeCodeMedia {
+            id
+          }
           references {
             source
             sourceId
@@ -195,6 +199,9 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
         prototypeHandoffArtifactId
         prototypeIterationId
         checkpointId
+        prototypeCodeMedia {
+          id
+        }
         references {
           source
           sourceId
@@ -266,6 +273,9 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
             prototypeHandoffArtifactId
             prototypeIterationId
             checkpointId
+            prototypeCodeMedia {
+              id
+            }
             references {
               source
               sourceId
@@ -534,6 +544,148 @@ def write_json_artifact(output_file: Path, payload: dict[str, Any]) -> None:
     auth_refresh.protect_local_file(output_file)
 
 
+def write_binary_artifact(output_file: Path, payload: bytes) -> None:
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "wb",
+        dir=output_file.parent,
+        prefix=f"{output_file.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        temp_path = Path(handle.name)
+        os.chmod(temp_path, stat.S_IRUSR | stat.S_IWUSR)
+        handle.write(payload)
+    os.replace(temp_path, output_file)
+    os.chmod(output_file, stat.S_IRUSR | stat.S_IWUSR)
+
+
+def _prototype_patch_artifact_directory(snapshot_path: Path) -> Path:
+    return snapshot_path.parent / f"{snapshot_path.stem}.artifacts" / "prototype-patches"
+
+
+def _merge_reference_provenance(
+    destination: dict[str, Any], prototype_reference: dict[str, Any]
+) -> None:
+    for field_name in (
+        "prototypeHandoffArtifactId",
+        "prototypeIterationId",
+        "checkpointId",
+    ):
+        if destination.get(field_name) is None and prototype_reference.get(field_name):
+            destination[field_name] = prototype_reference.get(field_name)
+
+    existing_references = destination.setdefault("references", [])
+    for reference in prototype_reference.get("references") or []:
+        if reference not in existing_references:
+            existing_references.append(reference)
+
+
+def _prototype_patch_filename(artifact: dict[str, Any]) -> str:
+    preferred_id = (
+        artifact.get("prototypeHandoffArtifactId")
+        or artifact.get("mediaId")
+        or "prototype-code-artifact"
+    )
+    return f"{_sanitize_filename_part(str(preferred_id))}.patch"
+
+
+def _build_prototype_code_artifacts(
+    specifications: list[dict[str, Any]],
+    *,
+    artifact_directory: Path,
+    token: str,
+    config: graphql_client.GraphQLRequestConfig,
+) -> list[dict[str, Any]]:
+    prototype_code_artifacts: list[dict[str, Any]] = []
+    artifacts_by_media_id: dict[str, dict[str, Any]] = {}
+
+    for specification in specifications:
+        prototype_reference = specification.get("prototypeReference") or {}
+        if not prototype_reference:
+            continue
+
+        specification_id = specification.get("id")
+        prototype_code_media = prototype_reference.get("prototypeCodeMedia") or {}
+        media_id = prototype_code_media.get("id")
+        if not media_id:
+            prototype_code_artifacts.append(
+                {
+                    "mediaId": None,
+                    "prototypeHandoffArtifactId": prototype_reference.get(
+                        "prototypeHandoffArtifactId"
+                    ),
+                    "prototypeIterationId": prototype_reference.get(
+                        "prototypeIterationId"
+                    ),
+                    "checkpointId": prototype_reference.get("checkpointId"),
+                    "references": list(prototype_reference.get("references") or []),
+                    "usedBySpecificationIds": (
+                        [specification_id] if specification_id else []
+                    ),
+                    "downloadStatus": "MISSING_MEDIA",
+                    "localPath": None,
+                    "downloadUrl": None,
+                    "error": "prototypeReference.prototypeCodeMedia.id was not present",
+                }
+            )
+            continue
+
+        artifact = artifacts_by_media_id.get(media_id)
+        if artifact is None:
+            artifact = {
+                "mediaId": media_id,
+                "prototypeHandoffArtifactId": prototype_reference.get(
+                    "prototypeHandoffArtifactId"
+                ),
+                "prototypeIterationId": prototype_reference.get(
+                    "prototypeIterationId"
+                ),
+                "checkpointId": prototype_reference.get("checkpointId"),
+                "references": list(prototype_reference.get("references") or []),
+                "usedBySpecificationIds": [],
+                "downloadStatus": "DOWNLOAD_FAILED",
+                "localPath": None,
+                "downloadUrl": None,
+                "error": None,
+            }
+            artifacts_by_media_id[media_id] = artifact
+            prototype_code_artifacts.append(artifact)
+        else:
+            _merge_reference_provenance(artifact, prototype_reference)
+
+        if (
+            specification_id
+            and specification_id not in artifact["usedBySpecificationIds"]
+        ):
+            artifact["usedBySpecificationIds"].append(specification_id)
+
+    for artifact in prototype_code_artifacts:
+        media_id = artifact.get("mediaId")
+        if not media_id:
+            continue
+
+        try:
+            download_url = graphql_client.generate_download_information(
+                str(media_id),
+                token=token,
+                config=config,
+            )
+            with request.urlopen(download_url, timeout=config.timeout_seconds) as response:
+                payload = response.read()
+            local_path = artifact_directory / _prototype_patch_filename(artifact)
+            write_binary_artifact(local_path, payload)
+            artifact["downloadStatus"] = "DOWNLOADED"
+            artifact["localPath"] = str(local_path)
+            artifact["error"] = None
+        except Exception as exc:
+            artifact["downloadStatus"] = "DOWNLOAD_FAILED"
+            artifact["localPath"] = None
+            artifact["error"] = str(exc)
+
+    return prototype_code_artifacts
+
+
 def ensure_authenticated_context(
     *,
     session_file: Path,
@@ -570,6 +722,7 @@ def run_download(
     output_file: Path | None = None,
 ) -> dict[str, Any]:
     request_config = config or graphql_client.GraphQLRequestConfig()
+    prototype_code_artifacts: list[dict[str, Any]] = []
 
     try:
         session_payload, social_me = ensure_authenticated_context(
@@ -586,6 +739,7 @@ def run_download(
             "task": None,
             "plannedPullRequest": None,
             "buildContext": None,
+            "prototypeCodeArtifacts": prototype_code_artifacts,
         }
     except Exception as exc:
         return {
@@ -596,6 +750,7 @@ def run_download(
             "task": None,
             "plannedPullRequest": None,
             "buildContext": None,
+            "prototypeCodeArtifacts": prototype_code_artifacts,
         }
 
     try:
@@ -614,6 +769,7 @@ def run_download(
             "task": None,
             "plannedPullRequest": None,
             "buildContext": None,
+            "prototypeCodeArtifacts": prototype_code_artifacts,
             "viewer": {
                 "username": session_payload["username"],
                 "email": session_payload["account_email"],
@@ -630,6 +786,7 @@ def run_download(
             "task": None,
             "plannedPullRequest": None,
             "buildContext": None,
+            "prototypeCodeArtifacts": prototype_code_artifacts,
             "viewer": {
                 "username": session_payload["username"],
                 "email": session_payload["account_email"],
@@ -647,6 +804,7 @@ def run_download(
             "task": task,
             "plannedPullRequest": None,
             "buildContext": None,
+            "prototypeCodeArtifacts": prototype_code_artifacts,
             "viewer": {
                 "username": session_payload["username"],
                 "email": session_payload["account_email"],
@@ -692,6 +850,7 @@ def run_download(
                     for planned_pull_request in enriched_pull_requests
                 ]
             },
+            "prototypeCodeArtifacts": prototype_code_artifacts,
             "viewer": {
                 "username": session_payload["username"],
                 "email": session_payload["account_email"],
@@ -718,6 +877,12 @@ def run_download(
             planned_pull_request_id=planned_pull_request_id,
         )
     ).expanduser()
+    prototype_code_artifacts = _build_prototype_code_artifacts(
+        selected_pull_request.get("specifications") or [],
+        artifact_directory=_prototype_patch_artifact_directory(snapshot_path),
+        token=session_payload["token"],
+        config=request_config,
+    )
     result = {
         "status": "SUCCESS",
         "canonicalTaskId": canonical_task_id,
@@ -728,6 +893,7 @@ def run_download(
         "snapshotFile": str(snapshot_path),
         "task": task,
         "plannedPullRequest": selected_pull_request,
+        "prototypeCodeArtifacts": prototype_code_artifacts,
         "buildContext": {
             "taskSummary": {
                 "id": task.get("id"),
@@ -763,6 +929,7 @@ def run_download(
                 task.get("taskRuns") or []
             ),
             "currentHumanBlocker": task.get("currentHumanBlocker"),
+            "prototypeCodeArtifacts": prototype_code_artifacts,
         },
         "viewer": {
             "username": session_payload["username"],
