@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 from pathlib import Path
 import stat
@@ -255,32 +257,32 @@ class DownloadTaskSpecificationTests(unittest.TestCase):
         self.assertEqual(result["status"], "NOT_FOUND")
         self.assertIsNone(result["snapshotFile"])
 
-    @mock.patch("download_task_specification.auth_refresh.warnings.warn")
     @mock.patch("download_task_specification.auth_refresh.os.chmod")
-    def test_write_json_artifact_warns_about_inherited_windows_acls(
+    def test_write_json_artifact_notices_inherited_windows_acls(
         self,
         chmod: mock.Mock,
-        warn: mock.Mock,
     ) -> None:
+        stderr = io.StringIO()
         with tempfile.TemporaryDirectory() as temp_dir:
             output_file = Path(temp_dir) / "task.json"
-            with mock.patch(
-                "download_task_specification.auth_refresh.is_windows_platform",
-                return_value=True,
-            ):
-                download_task_specification.write_json_artifact(
-                    output_file,
-                    {"canonicalTaskId": "FRONTPAGE-42"},
-                )
+            with contextlib.redirect_stderr(stderr):
+                with mock.patch(
+                    "download_task_specification.auth_refresh.is_windows_platform",
+                    return_value=True,
+                ):
+                    download_task_specification.write_json_artifact(
+                        output_file,
+                        {"canonicalTaskId": "FRONTPAGE-42"},
+                    )
             self.assertTrue(output_file.exists())
 
         chmod.assert_not_called()
-        warn.assert_called_once()
         self.assertEqual(
-            warn.call_args.args[0],
-            download_task_specification.auth_refresh.WINDOWS_PERMISSION_FALLBACK_WARNING,
+            stderr.getvalue().count(
+                download_task_specification.auth_refresh.WINDOWS_PERMISSION_FALLBACK_WARNING
+            ),
+            1,
         )
-        self.assertIs(warn.call_args.args[1], RuntimeWarning)
 
 
 if __name__ == "__main__":

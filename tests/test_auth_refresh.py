@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 from pathlib import Path
 import stat
@@ -40,13 +42,12 @@ class AuthRefreshTests(unittest.TestCase):
             mode = stat.S_IMODE(session_file.stat().st_mode)
             self.assertEqual(mode, auth_refresh.PRIVATE_FILE_MODE)
 
-    @mock.patch("auth_refresh.warnings.warn")
     @mock.patch("auth_refresh.os.chmod")
-    def test_write_session_warns_about_inherited_windows_acls(
+    def test_write_session_notices_inherited_windows_acls_without_blocking_write(
         self,
         chmod: mock.Mock,
-        warn: mock.Mock,
     ) -> None:
+        stderr = io.StringIO()
         with tempfile.TemporaryDirectory() as temp_dir:
             session_file = Path(temp_dir) / "iteraz.json"
             payload = auth_refresh.build_session(
@@ -56,16 +57,16 @@ class AuthRefreshTests(unittest.TestCase):
                 refresh_token="refresh-1",
             )
 
-            with mock.patch("auth_refresh.is_windows_platform", return_value=True):
-                auth_refresh.write_session(session_file, payload)
+            with contextlib.redirect_stderr(stderr):
+                with mock.patch("auth_refresh.is_windows_platform", return_value=True):
+                    auth_refresh.write_session(session_file, payload)
 
+            self.assertTrue(session_file.exists())
         chmod.assert_not_called()
-        warn.assert_called_once()
         self.assertEqual(
-            warn.call_args.args[0],
-            auth_refresh.WINDOWS_PERMISSION_FALLBACK_WARNING,
+            stderr.getvalue().count(auth_refresh.WINDOWS_PERMISSION_FALLBACK_WARNING),
+            1,
         )
-        self.assertIs(warn.call_args.args[1], RuntimeWarning)
 
     @mock.patch("auth_refresh.graphql_client.execute_graphql")
     def test_refresh_session_rotates_tokens(self, execute_graphql: mock.Mock) -> None:

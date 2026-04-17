@@ -11,7 +11,6 @@ import stat
 import sys
 import tempfile
 from typing import Any
-import warnings
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -82,11 +81,7 @@ def warn_about_windows_permission_fallback() -> None:
     global _warned_about_windows_permission_fallback
     if _warned_about_windows_permission_fallback:
         return
-    warnings.warn(
-        WINDOWS_PERMISSION_FALLBACK_WARNING,
-        RuntimeWarning,
-        stacklevel=3,
-    )
+    print(WINDOWS_PERMISSION_FALLBACK_WARNING, file=sys.stderr)
     _warned_about_windows_permission_fallback = True
 
 
