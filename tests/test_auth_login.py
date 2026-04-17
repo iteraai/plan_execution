@@ -148,10 +148,14 @@ class AuthLoginTests(unittest.TestCase):
 
         self.assertEqual(session["token"], "access-token")
         self.assertEqual(session["refresh_token"], "refresh-token")
-        self.assertIn("TOTP enrollment is required for this account.", stderr.getvalue())
+        self.assertIn(
+            "TOTP enrollment is required for this account.", stderr.getvalue()
+        )
         self.assertIn("intentionally not printed by this tool", stderr.getvalue())
         self.assertNotIn("VERY-SECRET", stderr.getvalue())
-        self.assertNotIn("otpauth://totp/Itera:thor?secret=VERY-SECRET", stderr.getvalue())
+        self.assertNotIn(
+            "otpauth://totp/Itera:thor?secret=VERY-SECRET", stderr.getvalue()
+        )
         self.assertNotIn("code-one", stderr.getvalue())
         self.assertNotIn("code-two", stderr.getvalue())
         write_session.assert_called_once()
