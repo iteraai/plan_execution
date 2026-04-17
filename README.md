@@ -70,3 +70,7 @@ users can use them without installing any other local skill.
 6. If unavailable, return the explicit reason without claiming anything.
 7. Claim the returned planned pull request with `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)`.
 8. Return a deterministic branch suggestion in the format `itera/<canonical-task-id-lower>/pr-<position+1>`.
+
+## License
+
+Apache License 2.0. See [`LICENSE`](LICENSE).
