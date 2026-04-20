@@ -30,9 +30,18 @@ This installs the skill into `~/.codex/skills/download-pr-specification`.
 6. Resolve the selected planned pull request from the task’s current plan.
 7. Derive build-oriented context such as source task specifications, dependency
    relationships, open questions, accepted task specifications, and repository hints.
-8. Write the full snapshot to a local JSON artifact so downstream agents can
+8. When the selected planned PR or its source task specifications include
+   prototype code media, download those artifacts beside the snapshot and
+   annotate the returned context with the local file paths.
+9. When a prototype patch is attached, emit explicit prototype implementation
+   guidance that makes patch review mandatory before coding. If the selected PR
+   includes UI or UX scope, the guidance must require a pixel-perfect UI
+   implementation from the prototype while excluding prototype logic, API
+   behavior, and backend behavior unless the written specs separately require
+   them.
+10. Write the full snapshot to a local JSON artifact so downstream agents can
    import it directly.
-9. Return the same snapshot as structured JSON on stdout.
+11. Return the same snapshot as structured JSON on stdout.
 
 ## Runtime entrypoint
 

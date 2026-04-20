@@ -22,6 +22,20 @@ if str(SCRIPTS_DIR) not in sys.path:
 import download_pr_specification
 
 
+def _build_prototype_reference(media_id: str = "media-123") -> dict[str, object]:
+    return {
+        "prototypeHandoffArtifactId": "handoff-1",
+        "prototypeIterationId": "prototype-1",
+        "checkpointId": "checkpoint-1",
+        "prototypeCodeMedia": {
+            "id": media_id,
+            "type": "PATCH",
+            "status": "COMPLETED",
+        },
+        "references": [],
+    }
+
+
 def _build_task_payload() -> dict[str, object]:
     return {
         "id": "task-1",
@@ -219,6 +233,109 @@ class DownloadPrSpecificationTests(unittest.TestCase):
         download_pr_specification.auth_refresh._warned_about_windows_permission_fallback = (
             False
         )
+
+    @mock.patch("download_pr_specification.ensure_authenticated_context")
+    @mock.patch("download_pr_specification.graphql_client.execute_graphql")
+    @mock.patch("download_pr_specification._download_private_media_bytes")
+    def test_run_download_downloads_prototype_media_via_download_information(
+        self,
+        download_private_media_bytes: mock.Mock,
+        execute_graphql: mock.Mock,
+        ensure_authenticated_context: mock.Mock,
+    ) -> None:
+        ensure_authenticated_context.return_value = (
+            {
+                "username": "thor",
+                "account_email": "thor@example.com",
+                "token": "access-token",
+            },
+            {"email": "thor@example.com"},
+        )
+        download_private_media_bytes.return_value = b"diff --git a/foo b/foo\n"
+        task_payload = _build_task_payload()
+        task_payload["specifications"][0]["type"] = "USER_UI"
+        task_payload["specifications"][0]["typeLabel"] = "User UI"
+        task_payload["specifications"][0]["title"] = "Match the dashboard UI"
+        task_payload["specifications"][0][
+            "prototypeReference"
+        ] = _build_prototype_reference()
+        task_payload["currentPlan"]["pullRequests"][1]["specifications"][0][
+            "type"
+        ] = "USER_UI"
+        task_payload["currentPlan"]["pullRequests"][1]["specifications"][0][
+            "typeLabel"
+        ] = "User UI"
+        task_payload["currentPlan"]["pullRequests"][1]["specifications"][0][
+            "title"
+        ] = "Match the dashboard UI"
+        task_payload["currentPlan"]["pullRequests"][1]["specifications"][0][
+            "prototypeReference"
+        ] = _build_prototype_reference()
+
+        def graphql_side_effect(
+            query: str,
+            variables: dict[str, object] | None = None,
+            *,
+            token: str | None = None,
+            config: object | None = None,
+        ) -> dict[str, object]:
+            del token, config
+            if "getIterationTaskByCanonicalId" in query:
+                return {"getIterationTaskByCanonicalId": task_payload}
+            if "generateDownloadInformation" in query:
+                self.assertEqual(variables, {"mediaId": "media-123"})
+                return {
+                    "generateDownloadInformation": {
+                        "url": "https://downloads.example.com/media-123?signature=abc",
+                        "expiration": "2026-04-21T00:00:00Z",
+                    }
+                }
+            self.fail(f"Unexpected GraphQL query: {query}")
+
+        execute_graphql.side_effect = graphql_side_effect
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_file = Path(temp_dir) / "pr.json"
+            result = download_pr_specification.run_download(
+                "FRONTPAGE-42",
+                pull_request_position=2,
+                output_file=output_file,
+            )
+
+            self.assertEqual(result["status"], "SUCCESS")
+            download_private_media_bytes.assert_called_once_with(
+                "https://downloads.example.com/media-123?signature=abc",
+                timeout_seconds=30.0,
+            )
+            self.assertEqual(
+                result["prototypeCodeMediaDownloads"][0][
+                    "downloadInformationExpiration"
+                ],
+                "2026-04-21T00:00:00Z",
+            )
+            self.assertTrue(
+                Path(result["prototypeCodeMediaDownloads"][0]["localFile"]).exists()
+            )
+            self.assertTrue(
+                result["prototypeCodeMediaDownloads"][0][
+                    "mustReviewBeforeImplementation"
+                ]
+            )
+            self.assertEqual(
+                result["plannedPullRequest"]["specifications"][0]["prototypeReference"][
+                    "prototypeCodeMediaLocalFile"
+                ],
+                result["prototypeCodeMediaDownloads"][0]["localFile"],
+            )
+            self.assertTrue(
+                result["prototypeImplementationGuidance"][
+                    "requiresPixelPerfectUiImplementation"
+                ]
+            )
+            self.assertIn(
+                "pixel-perfect",
+                result["prototypeImplementationGuidance"]["instructionSummary"],
+            )
 
     @mock.patch("download_pr_specification.ensure_authenticated_context")
     @mock.patch("download_pr_specification.graphql_client.execute_graphql")

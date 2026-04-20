@@ -9,6 +9,9 @@ from pathlib import Path
 import sys
 import tempfile
 from typing import Any
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -150,6 +153,11 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
           prototypeHandoffArtifactId
           prototypeIterationId
           checkpointId
+          prototypeCodeMedia {
+            id
+            type
+            status
+          }
           references {
             source
             sourceId
@@ -195,6 +203,11 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
         prototypeHandoffArtifactId
         prototypeIterationId
         checkpointId
+        prototypeCodeMedia {
+          id
+          type
+          status
+        }
         references {
           source
           sourceId
@@ -266,6 +279,11 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
             prototypeHandoffArtifactId
             prototypeIterationId
             checkpointId
+            prototypeCodeMedia {
+              id
+              type
+              status
+            }
             references {
               source
               sourceId
@@ -293,8 +311,37 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
   }
 }
 """.strip()
+GENERATE_DOWNLOAD_INFORMATION_MUTATION = """
+mutation GenerateDownloadInformation($mediaId: MediaID!) {
+  generateDownloadInformation(media: $mediaId) {
+    url
+    expiration
+  }
+}
+""".strip()
 DEFAULT_OUTPUT_ROOT = (
     Path.home() / ".codex" / "artifacts" / "plan_execution" / "specifications"
+)
+PROTOTYPE_CODE_MEDIA_DIRNAME = "prototype_code_media"
+MEDIA_FILE_SUFFIX_BY_TYPE = {
+    "PATCH": ".patch",
+}
+UI_SPECIFICATION_TYPE_KEYS = {"USER_UI", "USER_EXPERIENCE"}
+UI_TEXT_SIGNAL_KEYWORDS = (
+    "ui",
+    "user ui",
+    "user interface",
+    "ux",
+    "user experience",
+    "frontend",
+    "front end",
+    "pixel perfect",
+    "visual",
+    "layout",
+    "spacing",
+    "typography",
+    "responsive",
+    "interaction",
 )
 
 
@@ -350,6 +397,181 @@ def _task_specs_by_id(task: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
+def _normalize_signal_text(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    normalized = value.lower().replace("_", " ").replace("-", " ")
+    return " ".join(normalized.split())
+
+
+def _has_ui_text_signal(values: list[Any]) -> bool:
+    for value in values:
+        normalized = _normalize_signal_text(value)
+        if not normalized:
+            continue
+        padded = f" {normalized} "
+        for keyword in UI_TEXT_SIGNAL_KEYWORDS:
+            if f" {keyword} " in padded:
+                return True
+    return False
+
+
+def _collect_prototype_patch_details(
+    specifications: list[dict[str, Any]],
+) -> tuple[list[str], list[str], list[str]]:
+    media_ids: set[str] = set()
+    local_files: set[str] = set()
+    download_errors: set[str] = set()
+
+    for specification in specifications:
+        prototype_reference = specification.get("prototypeReference") or {}
+        prototype_code_media = prototype_reference.get("prototypeCodeMedia") or {}
+        if str(prototype_code_media.get("type") or "").upper() != "PATCH":
+            continue
+        media_id = prototype_code_media.get("id")
+        if media_id:
+            media_ids.add(str(media_id))
+        local_file = prototype_reference.get("prototypeCodeMediaLocalFile")
+        if local_file:
+            local_files.add(str(local_file))
+        download_error = prototype_reference.get("prototypeCodeMediaDownloadError")
+        if download_error:
+            download_errors.add(str(download_error))
+
+    return sorted(media_ids), sorted(local_files), sorted(download_errors)
+
+
+def _collect_ui_scope_signals(
+    specifications: list[dict[str, Any]],
+    *,
+    context_values: list[Any] | None = None,
+) -> list[str]:
+    signals: list[str] = []
+    specification_types = {
+        str(specification.get("type") or "").upper() for specification in specifications
+    }
+    matched_ui_types = UI_SPECIFICATION_TYPE_KEYS & specification_types
+    if "USER_UI" in matched_ui_types:
+        signals.append("SPECIFICATION_TYPE_USER_UI")
+    if "USER_EXPERIENCE" in matched_ui_types:
+        signals.append("SPECIFICATION_TYPE_USER_EXPERIENCE")
+
+    specification_text_values: list[Any] = []
+    for specification in specifications:
+        specification_text_values.extend(
+            [
+                specification.get("typeLabel"),
+                specification.get("customTypeLabel"),
+                specification.get("title"),
+                specification.get("deltaExplanation"),
+                specification.get("before"),
+                specification.get("after"),
+                specification.get("target"),
+                specification.get("rule"),
+            ]
+        )
+    if _has_ui_text_signal(specification_text_values):
+        signals.append("SPECIFICATION_TEXT_UI_KEYWORDS")
+    if context_values and _has_ui_text_signal(context_values):
+        signals.append("CONTEXT_UI_KEYWORDS")
+    return signals
+
+
+def _build_prototype_patch_instruction_summary(
+    *,
+    has_local_files: bool,
+    is_ui_or_ux_scope: bool,
+) -> str:
+    if not has_local_files:
+        prefix = "Mandatory: resolve the prototype patch download failure before implementation."
+    else:
+        prefix = "Mandatory: open the downloaded prototype patch before writing code."
+
+    if is_ui_or_ux_scope:
+        return (
+            f"{prefix} This work has UI/UX signals, so treat the prototype as the visual "
+            "source of truth and match it pixel-perfect for layout, spacing, sizing, "
+            "typography, states, responsive behavior, and relevant interactions. Do not "
+            "copy logic, data flow, APIs, or backend behavior from the prototype unless "
+            "the written specifications explicitly require that work."
+        )
+
+    return (
+        f"{prefix} Treat it as required implementation context. If this work includes UI "
+        "or UX scope, use the prototype as the visual source of truth for pixel-perfect "
+        "implementation and do not copy prototype logic, APIs, or backend behavior unless "
+        "the written specifications explicitly require that work."
+    )
+
+
+def _selected_pull_request_prototype_specifications(
+    selected_pull_request: dict[str, Any],
+) -> list[dict[str, Any]]:
+    specifications: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    def add_specification(specification: dict[str, Any] | None) -> None:
+        if not isinstance(specification, dict):
+            return
+        key = str(specification.get("id") or id(specification))
+        if key in seen_ids:
+            return
+        seen_ids.add(key)
+        specifications.append(specification)
+
+    for specification in selected_pull_request.get("specifications") or []:
+        add_specification(specification)
+        add_specification(specification.get("sourceTaskSpecification"))
+
+    return specifications
+
+
+def _build_selected_pull_request_prototype_guidance(
+    selected_pull_request: dict[str, Any],
+) -> dict[str, Any] | None:
+    relevant_specifications = _selected_pull_request_prototype_specifications(
+        selected_pull_request
+    )
+    prototype_patch_media_ids, prototype_patch_local_files, download_errors = (
+        _collect_prototype_patch_details(relevant_specifications)
+    )
+    if not prototype_patch_media_ids:
+        return None
+
+    ui_scope_signals = _collect_ui_scope_signals(
+        relevant_specifications,
+        context_values=[
+            selected_pull_request.get("title"),
+            selected_pull_request.get("goal"),
+            selected_pull_request.get("deploymentTargetLabel"),
+            *(selected_pull_request.get("allowedPathPrefixes") or []),
+            *(selected_pull_request.get("mainTouchPoints") or []),
+        ],
+    )
+    return {
+        "scope": "SELECTED_PLANNED_PULL_REQUEST",
+        "plannedPullRequestId": selected_pull_request.get("id"),
+        "plannedPullRequestPosition": selected_pull_request.get("position"),
+        "plannedPullRequestTitle": selected_pull_request.get("title"),
+        "requiresPrototypePatchReview": True,
+        "requiresPixelPerfectUiImplementation": bool(ui_scope_signals),
+        "uiScopeSignals": ui_scope_signals,
+        "prototypePatchMediaIds": prototype_patch_media_ids,
+        "prototypePatchLocalFiles": prototype_patch_local_files,
+        "prototypePatchDownloadErrors": download_errors,
+        "instructionSummary": _build_prototype_patch_instruction_summary(
+            has_local_files=bool(prototype_patch_local_files),
+            is_ui_or_ux_scope=bool(ui_scope_signals),
+        ),
+        "requirements": [
+            "Do not start implementation until every referenced prototype patch has been downloaded or the download failure has been resolved.",
+            "Open the downloaded prototype patch before editing code and keep it visible while implementing the affected slice.",
+            "When the work includes UI or UX scope, copy the prototype pixel-perfect for layout, spacing, sizing, typography, states, responsive behavior, and relevant interactions.",
+            "Use the prototype only for UI/UX guidance unless the written specs explicitly say otherwise; do not inherit its business logic, data flow, API contracts, or backend behavior.",
+        ],
+    }
+
+
 def _enrich_planned_pull_request(
     planned_pull_request: dict[str, Any],
     *,
@@ -369,6 +591,9 @@ def _enrich_planned_pull_request(
             )
         enriched_specifications.append(enriched_specification)
     enriched["specifications"] = enriched_specifications
+    enriched["prototypeImplementationGuidance"] = (
+        _build_selected_pull_request_prototype_guidance(enriched)
+    )
     return enriched
 
 
@@ -407,6 +632,9 @@ def _brief_pull_request(planned_pull_request: dict[str, Any]) -> dict[str, Any]:
         "repositoryTarget": planned_pull_request.get("repositoryTarget") or {},
         "remoteRepositoryUrl": planned_pull_request.get("remoteRepositoryUrl"),
         "execution": planned_pull_request.get("execution"),
+        "prototypeImplementationGuidance": planned_pull_request.get(
+            "prototypeImplementationGuidance"
+        ),
     }
 
 
@@ -532,6 +760,255 @@ def write_json_artifact(output_file: Path, payload: dict[str, Any]) -> None:
         handle.write("\n")
     os.replace(temp_path, output_file)
     auth_refresh.protect_local_file(output_file)
+
+
+def write_binary_artifact(output_file: Path, payload: bytes) -> None:
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "wb",
+        dir=output_file.parent,
+        prefix=f"{output_file.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        temp_path = Path(handle.name)
+        auth_refresh.protect_local_file(temp_path)
+        handle.write(payload)
+    os.replace(temp_path, output_file)
+    auth_refresh.protect_local_file(output_file)
+
+
+def _prototype_code_media_output_root(snapshot_path: Path) -> Path:
+    return snapshot_path.parent / snapshot_path.stem / PROTOTYPE_CODE_MEDIA_DIRNAME
+
+
+def _media_file_suffix(media_type: str | None) -> str:
+    normalized_media_type = str(media_type or "").upper()
+    return MEDIA_FILE_SUFFIX_BY_TYPE.get(normalized_media_type, ".bin")
+
+
+def _parse_s3_bucket_and_key(media_url: str) -> tuple[str, str] | None:
+    parsed_url = urllib_parse.urlparse(media_url)
+    if parsed_url.scheme not in {"http", "https"}:
+        return None
+
+    host = parsed_url.netloc.strip().lower()
+    path = urllib_parse.unquote(parsed_url.path.lstrip("/"))
+    if not host or not path:
+        return None
+
+    if host.endswith(".s3.amazonaws.com"):
+        bucket = host[: -len(".s3.amazonaws.com")]
+        return (bucket, path) if bucket else None
+
+    if ".s3." in host:
+        bucket = host.split(".s3.", 1)[0]
+        return (bucket, path) if bucket else None
+
+    if host == "s3.amazonaws.com" or host.startswith("s3."):
+        bucket, _, key = path.partition("/")
+        return (bucket, key) if bucket and key else None
+
+    return None
+
+
+def _download_private_media_bytes(media_url: str, *, timeout_seconds: float) -> bytes:
+    media_request = urllib_request.Request(media_url, method="GET")
+    try:
+        with urllib_request.urlopen(media_request, timeout=timeout_seconds) as response:
+            return response.read()
+    except urllib_error.HTTPError as exc:
+        if exc.code not in {401, 403}:
+            raise
+    except urllib_error.URLError:
+        pass
+
+    bucket_and_key = _parse_s3_bucket_and_key(media_url)
+    if bucket_and_key is None:
+        raise RuntimeError(
+            "Prototype code media URL is not directly readable and is not a supported S3 URL"
+        )
+
+    try:
+        import boto3
+    except Exception as exc:  # pragma: no cover - dependency/environment failure
+        raise RuntimeError(
+            "Prototype code media URL requires private access and boto3 is unavailable for S3 fallback"
+        ) from exc
+
+    bucket, key = bucket_and_key
+    s3_client = boto3.client("s3")
+    response = s3_client.get_object(Bucket=bucket, Key=key)
+    return response["Body"].read()
+
+
+def _generate_download_information(
+    media_id: str,
+    *,
+    token: str,
+    config: graphql_client.GraphQLRequestConfig,
+) -> tuple[str | None, str | None]:
+    response = graphql_client.execute_graphql(
+        GENERATE_DOWNLOAD_INFORMATION_MUTATION,
+        {"mediaId": media_id},
+        token=token,
+        config=config,
+    )
+    download_information = response.get("generateDownloadInformation") or {}
+    return (
+        download_information.get("url"),
+        download_information.get("expiration"),
+    )
+
+
+def _register_prototype_code_media_reference(
+    collected_media: dict[str, dict[str, Any]],
+    *,
+    prototype_reference: dict[str, Any],
+    source_location: dict[str, Any],
+) -> None:
+    prototype_code_media = prototype_reference.get("prototypeCodeMedia")
+    if not isinstance(prototype_code_media, dict):
+        return
+
+    media_id = prototype_code_media.get("id")
+    if not media_id:
+        return
+
+    collected_entry = collected_media.setdefault(
+        media_id,
+        {
+            "media": prototype_code_media,
+            "prototypeReferences": [],
+            "sourceLocations": [],
+        },
+    )
+    collected_entry["prototypeReferences"].append(prototype_reference)
+    collected_entry["sourceLocations"].append(source_location)
+
+
+def _collect_prototype_code_media_from_selected_pull_request(
+    selected_pull_request: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    collected_media: dict[str, dict[str, Any]] = {}
+
+    for specification in selected_pull_request.get("specifications") or []:
+        prototype_reference = specification.get("prototypeReference")
+        if isinstance(prototype_reference, dict):
+            _register_prototype_code_media_reference(
+                collected_media,
+                prototype_reference=prototype_reference,
+                source_location={
+                    "kind": "SELECTED_PLANNED_PULL_REQUEST_SPECIFICATION",
+                    "plannedPullRequestId": selected_pull_request.get("id"),
+                    "plannedPullRequestPosition": selected_pull_request.get("position"),
+                    "plannedPullRequestTitle": selected_pull_request.get("title"),
+                    "specificationId": specification.get("id"),
+                    "title": specification.get("title"),
+                    "target": specification.get("target"),
+                },
+            )
+
+        source_task_specification = specification.get("sourceTaskSpecification")
+        if not isinstance(source_task_specification, dict):
+            continue
+        source_prototype_reference = source_task_specification.get("prototypeReference")
+        if isinstance(source_prototype_reference, dict):
+            _register_prototype_code_media_reference(
+                collected_media,
+                prototype_reference=source_prototype_reference,
+                source_location={
+                    "kind": "SOURCE_TASK_SPECIFICATION",
+                    "plannedPullRequestId": selected_pull_request.get("id"),
+                    "plannedPullRequestPosition": selected_pull_request.get("position"),
+                    "plannedPullRequestTitle": selected_pull_request.get("title"),
+                    "specificationId": source_task_specification.get("id"),
+                    "title": source_task_specification.get("title"),
+                    "target": source_task_specification.get("target"),
+                },
+            )
+
+    return collected_media
+
+
+def _download_prototype_code_media_artifacts(
+    selected_pull_request: dict[str, Any],
+    *,
+    snapshot_path: Path,
+    token: str,
+    config: graphql_client.GraphQLRequestConfig,
+    timeout_seconds: float,
+) -> list[dict[str, Any]]:
+    collected_media = _collect_prototype_code_media_from_selected_pull_request(
+        selected_pull_request
+    )
+    if not collected_media:
+        return []
+
+    output_root = _prototype_code_media_output_root(snapshot_path)
+    downloads: list[dict[str, Any]] = []
+
+    for media_id, collected_entry in sorted(collected_media.items()):
+        media = collected_entry["media"]
+        local_file: str | None = None
+        error_message: str | None = None
+        download_status = "SKIPPED"
+        download_information_expiration: str | None = None
+
+        if str(media.get("status") or "").upper() == "COMPLETED":
+            media_file = (
+                output_root / f"{media_id}{_media_file_suffix(media.get('type'))}"
+            )
+            try:
+                download_url, download_information_expiration = (
+                    _generate_download_information(
+                        media_id,
+                        token=token,
+                        config=config,
+                    )
+                )
+                if not download_url:
+                    raise RuntimeError(
+                        "generateDownloadInformation returned no download URL"
+                    )
+                if not media_file.exists():
+                    payload_bytes = _download_private_media_bytes(
+                        download_url,
+                        timeout_seconds=timeout_seconds,
+                    )
+                    write_binary_artifact(media_file, payload_bytes)
+                local_file = str(media_file)
+                download_status = "DOWNLOADED"
+            except Exception as exc:
+                error_message = str(exc)
+                download_status = "FAILED"
+
+        for prototype_reference in collected_entry["prototypeReferences"]:
+            if local_file is not None:
+                prototype_reference["prototypeCodeMediaLocalFile"] = local_file
+            if error_message is not None:
+                prototype_reference["prototypeCodeMediaDownloadError"] = error_message
+
+        downloads.append(
+            {
+                "mediaId": media_id,
+                "mediaType": media.get("type"),
+                "mediaStatus": media.get("status"),
+                "downloadStatus": download_status,
+                "downloadInformationExpiration": download_information_expiration,
+                "localFile": local_file,
+                "error": error_message,
+                "mustReviewBeforeImplementation": True,
+                "usageSummary": (
+                    "Mandatory: inspect this prototype patch before implementation. If the "
+                    "associated work includes UI or UX scope, use it as the pixel-perfect "
+                    "visual reference and do not copy logic or backend behavior from it."
+                ),
+                "sourceLocations": collected_entry["sourceLocations"],
+            }
+        )
+
+    return downloads
 
 
 def ensure_authenticated_context(
@@ -718,13 +1195,30 @@ def run_download(
             planned_pull_request_id=planned_pull_request_id,
         )
     ).expanduser()
+    prototype_code_media_downloads = _download_prototype_code_media_artifacts(
+        selected_pull_request,
+        snapshot_path=snapshot_path,
+        token=session_payload["token"],
+        config=request_config,
+        timeout_seconds=30.0,
+    )
+    selected_pull_request["prototypeImplementationGuidance"] = (
+        _build_selected_pull_request_prototype_guidance(selected_pull_request)
+    )
+    prototype_implementation_guidance = selected_pull_request.get(
+        "prototypeImplementationGuidance"
+    )
     result = {
         "status": "SUCCESS",
         "canonicalTaskId": canonical_task_id,
         "requestedPullRequestPosition": pull_request_position,
         "requestedPlannedPullRequestId": planned_pull_request_id,
         "downloadedAt": auth_refresh.utc_now(),
-        "message": "Downloaded full planned pull request specification snapshot",
+        "message": (
+            "Downloaded full planned pull request specification snapshot and prototype code media artifacts"
+            if prototype_code_media_downloads
+            else "Downloaded full planned pull request specification snapshot"
+        ),
         "snapshotFile": str(snapshot_path),
         "task": task,
         "plannedPullRequest": selected_pull_request,
@@ -763,7 +1257,10 @@ def run_download(
                 task.get("taskRuns") or []
             ),
             "currentHumanBlocker": task.get("currentHumanBlocker"),
+            "prototypeImplementationGuidance": prototype_implementation_guidance,
         },
+        "prototypeImplementationGuidance": prototype_implementation_guidance,
+        "prototypeCodeMediaDownloads": prototype_code_media_downloads,
         "viewer": {
             "username": session_payload["username"],
             "email": session_payload["account_email"],

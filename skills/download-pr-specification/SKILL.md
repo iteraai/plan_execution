@@ -37,8 +37,16 @@ See `input-contract.json`.
 5. Call `getIterationTaskByCanonicalId(canonicalId)`.
 6. Resolve the selected planned pull request by human position or Itera planned-pull-request ID.
 7. Build an implementation snapshot that includes the selected pull request, repository target, dependency context, and source task specification crosswalk.
-8. Write the full snapshot to `~/.codex/artifacts/plan_execution/specifications/planned_pull_requests/<canonical-task-id-lower>/pr-<position>.json` unless an explicit output path is provided.
-9. Return the same snapshot as JSON, including the artifact path for later imports.
+8. When the selected planned PR or its source task specifications include `prototypeCodeMedia`, resolve a presigned download URL with `generateDownloadInformation(media)` and download that private media artifact to a local file next to the PR snapshot.
+9. When a prototype patch is attached, add explicit `prototypeImplementationGuidance` to the snapshot. That guidance must make patch review mandatory before coding. If the attached prototype is relevant to UI or UX work, the guidance must say to use it as the visual source of truth and match it pixel-perfect for UI details and relevant UX, while explicitly excluding prototype logic, APIs, and backend behavior unless separately specified.
+10. Write the full snapshot to `~/.codex/artifacts/plan_execution/specifications/planned_pull_requests/<canonical-task-id-lower>/pr-<position>.json` unless an explicit output path is provided.
+11. Return the same snapshot as JSON, including the artifact path, downloaded prototype media metadata, and prototype guidance for later imports.
+
+## Prototype guardrails
+
+- Downloaded prototype patches are required implementation input, not optional context.
+- If the selected PR includes UI or UX work, the prototype must drive a pixel-perfect implementation of visuals and relevant interactions.
+- Do not copy product logic, API contracts, data flow, or backend behavior from the prototype unless the written specifications separately require that work.
 
 ## Runtime constraints
 
