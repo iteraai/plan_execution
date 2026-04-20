@@ -682,7 +682,9 @@ def _collect_prototype_code_media(task: dict[str, Any]) -> dict[str, dict[str, A
                     source_location={
                         "kind": "PLANNED_PULL_REQUEST_SPECIFICATION",
                         "plannedPullRequestId": planned_pull_request.get("id"),
-                        "plannedPullRequestPosition": planned_pull_request.get("position"),
+                        "plannedPullRequestPosition": planned_pull_request.get(
+                            "position"
+                        ),
                         "plannedPullRequestTitle": planned_pull_request.get("title"),
                         "specificationId": specification.get("id"),
                         "title": specification.get("title"),
@@ -714,7 +716,9 @@ def _download_prototype_code_media_artifacts(
         download_status = "SKIPPED"
 
         if media_url and str(media.get("status") or "").upper() == "COMPLETED":
-            media_file = output_root / f"{media_id}{_media_file_suffix(media.get('type'))}"
+            media_file = (
+                output_root / f"{media_id}{_media_file_suffix(media.get('type'))}"
+            )
             try:
                 if not media_file.exists():
                     payload_bytes = _download_private_media_bytes(

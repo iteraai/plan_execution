@@ -439,7 +439,9 @@ def _download_prototype_code_media_artifacts(
         download_status = "SKIPPED"
 
         if media_url and str(media.get("status") or "").upper() == "COMPLETED":
-            media_file = output_root / f"{media_id}{_media_file_suffix(media.get('type'))}"
+            media_file = (
+                output_root / f"{media_id}{_media_file_suffix(media.get('type'))}"
+            )
             try:
                 if not media_file.exists():
                     payload_bytes = _download_private_media_bytes(
