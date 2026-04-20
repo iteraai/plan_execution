@@ -221,6 +221,15 @@ class DownloadTaskSpecificationTests(unittest.TestCase):
         task_payload["currentPlan"]["pullRequests"][0]["specifications"][0][
             "prototypeReference"
         ] = _build_prototype_reference()
+        task_payload["currentPlan"]["pullRequests"][0]["specifications"][0][
+            "type"
+        ] = "USER_UI"
+        task_payload["currentPlan"]["pullRequests"][0]["specifications"][0][
+            "typeLabel"
+        ] = "User UI"
+        task_payload["currentPlan"]["pullRequests"][0]["specifications"][0][
+            "title"
+        ] = "Match the dashboard UI to the prototype"
 
         def graphql_side_effect(
             query: str,
@@ -265,11 +274,27 @@ class DownloadTaskSpecificationTests(unittest.TestCase):
             self.assertTrue(
                 Path(result["prototypeCodeMediaDownloads"][0]["localFile"]).exists()
             )
+            self.assertTrue(
+                result["prototypeCodeMediaDownloads"][0][
+                    "mustReviewBeforeImplementation"
+                ]
+            )
             self.assertEqual(
                 result["task"]["currentPlan"]["pullRequests"][0]["specifications"][0][
                     "prototypeReference"
                 ]["prototypeCodeMediaLocalFile"],
                 result["prototypeCodeMediaDownloads"][0]["localFile"],
+            )
+            self.assertTrue(
+                result["buildContext"]["currentPlan"]["pullRequests"][0][
+                    "prototypeImplementationGuidance"
+                ]["requiresPixelPerfectUiImplementation"]
+            )
+            self.assertIn(
+                "pixel-perfect",
+                result["prototypeImplementationGuidance"]["plannedPullRequests"][0][
+                    "instructionSummary"
+                ],
             )
 
     @mock.patch("download_task_specification.ensure_authenticated_context")

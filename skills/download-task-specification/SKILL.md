@@ -36,8 +36,15 @@ See `input-contract.json`.
 5. Call `getIterationTaskByCanonicalId(canonicalId)`.
 6. Build a coding-oriented context payload with task specifications, questions, runs, repository hints, and current plan data.
 7. When a task or planned PR specification includes `prototypeCodeMedia`, resolve a presigned download URL with `generateDownloadInformation(media)` and download that private media artifact to a local file next to the task snapshot.
-8. Write the full snapshot to `~/.codex/artifacts/plan_execution/specifications/tasks/<canonical-task-id-lower>.json` unless an explicit output path is provided.
-9. Return the same snapshot as JSON, including the artifact path for later imports.
+8. When a prototype patch is attached, add explicit `prototypeImplementationGuidance` to the snapshot. That guidance must make patch review mandatory before coding. If the attached prototype is relevant to UI or UX work, the guidance must say to use it as the visual source of truth and match it pixel-perfect for UI details and relevant UX, while explicitly excluding prototype logic, APIs, and backend behavior unless separately specified.
+9. Write the full snapshot to `~/.codex/artifacts/plan_execution/specifications/tasks/<canonical-task-id-lower>.json` unless an explicit output path is provided.
+10. Return the same snapshot as JSON, including the artifact path and prototype guidance for later imports.
+
+## Prototype guardrails
+
+- Downloaded prototype patches are required implementation input, not optional context.
+- If the relevant task or planned PR includes UI or UX work, the prototype must drive a pixel-perfect implementation of visuals and relevant interactions.
+- Do not copy product logic, API contracts, data flow, or backend behavior from the prototype unless the written specifications separately require that work.
 
 ## Runtime constraints
 

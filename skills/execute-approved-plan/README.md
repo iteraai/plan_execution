@@ -26,7 +26,8 @@ This installs the skill into `~/.codex/skills/execute-approved-plan`.
 8. Generate the branch name as `itera/<canonical-task-id-lower>/pr-<position+1>`.
 9. Call `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)` to transition into `IMPLEMENTING` and bind the branch.
 10. Resolve any referenced prototype code media artifacts, such as `.patch` files, through `generateDownloadInformation(media)`, download them into `~/.codex/artifacts/plan_execution/claims/<canonical-task-id-lower>/pr-<position>/prototype_code_media/`, and annotate the returned plan context with those local paths.
-11. Return suggested branch name, execution state, richer implementation context payload, and prototype code media download metadata.
+11. When a prototype patch is attached, emit explicit prototype implementation guidance that makes patch review mandatory before coding. If the PR includes UI or UX scope, the guidance must require a pixel-perfect UI implementation from the prototype while excluding prototype logic, API behavior, and backend behavior unless the written specs separately require them.
+12. Return suggested branch name, execution state, richer implementation context payload, explicit prototype guidance, and prototype code media download metadata.
 
 ## Runtime entrypoint
 
