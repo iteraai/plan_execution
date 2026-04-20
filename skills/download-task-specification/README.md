@@ -26,9 +26,13 @@ This installs the skill into `~/.codex/skills/download-task-specification`.
 5. Read the full task payload using `getIterationTaskByCanonicalId(canonicalId)`.
 6. Derive build-oriented context such as repository hints, latest task runs,
    open questions, accepted specifications, and the enriched current plan.
-7. Write the full snapshot to a local JSON artifact so downstream agents can
+7. Resolve any referenced prototype code media artifacts, such as `.patch`
+   files, through `generateDownloadInformation(media)` and download them to a
+   local artifact directory beside the task snapshot while annotating the
+   snapshot with those local file paths.
+8. Write the full snapshot to a local JSON artifact so downstream agents can
    import it directly.
-8. Return the same snapshot as structured JSON on stdout.
+9. Return the same snapshot as structured JSON on stdout.
 
 ## Runtime entrypoint
 

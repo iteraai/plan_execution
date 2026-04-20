@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -12,6 +14,20 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import execute_approved_plan
+
+
+def _build_prototype_reference(media_id: str = "media-123") -> dict[str, object]:
+    return {
+        "prototypeHandoffArtifactId": "handoff-1",
+        "prototypeIterationId": "prototype-1",
+        "checkpointId": "checkpoint-1",
+        "prototypeCodeMedia": {
+            "id": media_id,
+            "type": "PATCH",
+            "status": "COMPLETED",
+        },
+        "references": [],
+    }
 
 
 class ExecuteApprovedPlanTests(unittest.TestCase):
@@ -50,6 +66,195 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "NO_READY_PR")
         self.assertEqual(result["plan"]["unavailableReason"], "already claimed")
+
+    @mock.patch("execute_approved_plan.ensure_authenticated_context")
+    @mock.patch("execute_approved_plan.graphql_client.execute_graphql")
+    @mock.patch("execute_approved_plan._download_private_media_bytes")
+    def test_run_execution_downloads_prototype_media_via_download_information(
+        self,
+        download_private_media_bytes: mock.Mock,
+        execute_graphql: mock.Mock,
+        ensure_authenticated_context: mock.Mock,
+    ) -> None:
+        ensure_authenticated_context.return_value = (
+            {
+                "username": "thor",
+                "account_email": "thor@example.com",
+                "token": "access-token",
+            },
+            {"email": "thor@example.com"},
+        )
+        download_private_media_bytes.return_value = b"diff --git a/foo b/foo\n"
+        selected_specification = {
+            "id": "spec-1",
+            "sourceTaskSpecificationId": "task-spec-1",
+            "type": "CUSTOM",
+            "typeLabel": "Custom",
+            "customTypeLabel": "Custom spec",
+            "title": "Spec title",
+            "deltaExplanation": "Explain delta",
+            "before": "Before",
+            "after": "After",
+            "target": "Target",
+            "rule": "Rule",
+            "inferredFromPrecedent": False,
+            "prototypeReference": _build_prototype_reference(),
+        }
+
+        def graphql_side_effect(
+            query: str,
+            variables: dict[str, object] | None = None,
+            *,
+            token: str | None = None,
+            config: object | None = None,
+        ) -> dict[str, object]:
+            del token, config
+            if "getNextReadyPlannedPullRequestForTask" in query:
+                return {
+                    "getNextReadyPlannedPullRequestForTask": {
+                        "iterationTask": {
+                            "id": "task-1",
+                            "canonicalId": "FRONTPAGE-42",
+                            "status": "READY_TO_BUILD",
+                        },
+                        "plannedPullRequest": {
+                            "id": "pr-1",
+                            "position": 0,
+                            "title": "PR 1",
+                            "goal": "Ship the slice",
+                            "specifications": [copy.deepcopy(selected_specification)],
+                            "deploymentTargetLabel": "apps/itera",
+                            "allowedPathPrefixes": ["src"],
+                            "mainTouchPoints": ["backend", "frontend"],
+                            "modelsToCreate": ["m1"],
+                            "newApiContracts": ["v1"],
+                            "repositoryTarget": {
+                                "provider": "GITHUB",
+                                "owner": "iteraai",
+                                "repoName": "Web",
+                                "mainBranchName": "main",
+                                "basePath": "",
+                                "stableRepositoryId": "repo-1",
+                            },
+                            "execution": {
+                                "status": "PLANNED",
+                                "branchName": None,
+                                "claimedByUser": None,
+                            },
+                        },
+                        "unavailableReason": None,
+                    }
+                }
+            if "query GetIterationTaskContext" in query:
+                return {
+                    "getIterationTask": {
+                        "id": "task-1",
+                        "canonicalId": "FRONTPAGE-42",
+                        "name": "Frontpage rollout",
+                        "goalDescription": "Build planned PR #1",
+                        "successCriteria": "Pass all checks",
+                        "outOfScope": "None",
+                        "contextProblem": "none",
+                        "currentPlan": {
+                            "id": "plan-1",
+                            "pullRequests": [
+                                {
+                                    "id": "pr-1",
+                                    "position": 0,
+                                    "title": "PR 1",
+                                    "goal": "Ship the slice",
+                                    "specifications": [
+                                        copy.deepcopy(selected_specification)
+                                    ],
+                                    "deploymentTargetLabel": "apps/itera",
+                                    "allowedPathPrefixes": ["src"],
+                                    "mainTouchPoints": ["backend", "frontend"],
+                                    "modelsToCreate": ["m1"],
+                                    "newApiContracts": ["v1"],
+                                    "repositoryTarget": {
+                                        "provider": "GITHUB",
+                                        "owner": "iteraai",
+                                        "repoName": "Web",
+                                        "mainBranchName": "main",
+                                        "basePath": "",
+                                        "stableRepositoryId": "repo-1",
+                                    },
+                                }
+                            ],
+                            "pullRequestDependencies": [],
+                        },
+                    }
+                }
+            if "claimPlannedPullRequestExecution" in query:
+                return {
+                    "claimPlannedPullRequestExecution": {
+                        "plannedPullRequest": {
+                            "id": "pr-1",
+                            "position": 0,
+                            "title": "PR 1",
+                            "goal": "Ship the slice",
+                            "deploymentTargetLabel": "apps/itera",
+                            "allowedPathPrefixes": ["src"],
+                            "mainTouchPoints": ["backend", "frontend"],
+                            "modelsToCreate": ["m1"],
+                            "newApiContracts": ["v1"],
+                            "specifications": [copy.deepcopy(selected_specification)],
+                            "repositoryTarget": {
+                                "provider": "GITHUB",
+                                "owner": "iteraai",
+                                "repoName": "Web",
+                                "mainBranchName": "main",
+                                "basePath": "",
+                                "stableRepositoryId": "repo-1",
+                            },
+                            "execution": {
+                                "status": "IMPLEMENTING",
+                                "branchName": "itera/frontpage-42/pr-1",
+                                "claimedByUser": {"username": "thor"},
+                                "providerPullRequestNumber": None,
+                                "providerPullRequestUrl": None,
+                            },
+                        }
+                    }
+                }
+            if "generateDownloadInformation" in query:
+                self.assertEqual(variables, {"mediaId": "media-123"})
+                return {
+                    "generateDownloadInformation": {
+                        "url": "https://downloads.example.com/media-123?signature=abc",
+                        "expiration": "2026-04-21T00:00:00Z",
+                    }
+                }
+            self.fail(f"Unexpected GraphQL query: {query}")
+
+        execute_graphql.side_effect = graphql_side_effect
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with mock.patch.object(
+                execute_approved_plan,
+                "DEFAULT_OUTPUT_ROOT",
+                Path(temp_dir),
+            ):
+                result = execute_approved_plan.run_execution("FRONTPAGE-42")
+                self.assertTrue(
+                    Path(result["prototypeCodeMediaDownloads"][0]["localFile"]).exists()
+                )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        download_private_media_bytes.assert_called_once_with(
+            "https://downloads.example.com/media-123?signature=abc",
+            timeout_seconds=30.0,
+        )
+        self.assertEqual(
+            result["prototypeCodeMediaDownloads"][0]["downloadInformationExpiration"],
+            "2026-04-21T00:00:00Z",
+        )
+        self.assertEqual(
+            result["implementationContext"]["selectedPlannedPullRequest"][
+                "specifications"
+            ][0]["prototypeReference"]["prototypeCodeMediaLocalFile"],
+            result["prototypeCodeMediaDownloads"][0]["localFile"],
+        )
 
     @mock.patch("execute_approved_plan.ensure_authenticated_context")
     @mock.patch("execute_approved_plan.graphql_client.execute_graphql")

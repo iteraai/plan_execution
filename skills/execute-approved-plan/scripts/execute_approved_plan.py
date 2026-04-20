@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
+import tempfile
 from typing import Any
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -30,6 +35,10 @@ query GetNextReadyPlannedPullRequestForTask($canonicalTaskId: IterationTaskCanon
         position
         title
         goal
+        allowedPathPrefixes
+        mainTouchPoints
+        modelsToCreate
+        newApiContracts
         specifications {
           id
           sourceTaskSpecificationId
@@ -43,6 +52,20 @@ query GetNextReadyPlannedPullRequestForTask($canonicalTaskId: IterationTaskCanon
           target
           rule
           inferredFromPrecedent
+          prototypeReference {
+            prototypeHandoffArtifactId
+            prototypeIterationId
+            checkpointId
+            prototypeCodeMedia {
+              id
+              type
+              status
+            }
+            references {
+              source
+              sourceId
+            }
+          }
         }
         deploymentTargetLabel
         repositoryTarget {
@@ -94,10 +117,24 @@ query GetIterationTaskContext($taskId: IterationTaskID!) {
                               title
                               deltaExplanation
                               before
-                              after
-                              target
-                              rule
-                              inferredFromPrecedent
+                            after
+                            target
+                            rule
+                            inferredFromPrecedent
+                            prototypeReference {
+                              prototypeHandoffArtifactId
+                              prototypeIterationId
+                              checkpointId
+                              prototypeCodeMedia {
+                                id
+                                type
+                                status
+                              }
+                              references {
+                                source
+                                sourceId
+                              }
+                            }
                             }
                             allowedPathPrefixes
                             mainTouchPoints
@@ -135,6 +172,38 @@ mutation ClaimPlannedPullRequestExecution(
       position
       title
       goal
+      allowedPathPrefixes
+      mainTouchPoints
+      modelsToCreate
+      newApiContracts
+      specifications {
+        id
+        sourceTaskSpecificationId
+        type
+        typeLabel
+        customTypeLabel
+        title
+        deltaExplanation
+        before
+        after
+        target
+        rule
+        inferredFromPrecedent
+        prototypeReference {
+          prototypeHandoffArtifactId
+          prototypeIterationId
+          checkpointId
+          prototypeCodeMedia {
+            id
+            type
+            status
+          }
+          references {
+            source
+            sourceId
+          }
+        }
+      }
       deploymentTargetLabel
       repositoryTarget {
         provider
@@ -157,6 +226,19 @@ mutation ClaimPlannedPullRequestExecution(
   }
 }
 """.strip()
+GENERATE_DOWNLOAD_INFORMATION_MUTATION = """
+mutation GenerateDownloadInformation($mediaId: MediaID!) {
+  generateDownloadInformation(media: $mediaId) {
+    url
+    expiration
+  }
+}
+""".strip()
+DEFAULT_OUTPUT_ROOT = Path.home() / ".codex" / "artifacts" / "plan_execution" / "claims"
+PROTOTYPE_CODE_MEDIA_DIRNAME = "prototype_code_media"
+MEDIA_FILE_SUFFIX_BY_TYPE = {
+    "PATCH": ".patch",
+}
 
 
 class AuthRequiredError(RuntimeError):
@@ -165,6 +247,271 @@ class AuthRequiredError(RuntimeError):
 
 def build_branch_name(canonical_task_id: str, position: int) -> str:
     return f"itera/{canonical_task_id.lower()}/pr-{position + 1}"
+
+
+def _sanitize_filename_part(value: str) -> str:
+    sanitized = []
+    for character in value:
+        if character.isalnum() or character in {"-", "_"}:
+            sanitized.append(character)
+        else:
+            sanitized.append("-")
+    return "".join(sanitized).strip("-") or "planned-pull-request"
+
+
+def _claim_artifact_root(
+    canonical_task_id: str, planned_pull_request: dict[str, Any] | None
+) -> Path:
+    output_root = DEFAULT_OUTPUT_ROOT / canonical_task_id.strip().lower()
+    if (
+        planned_pull_request is not None
+        and planned_pull_request.get("position") is not None
+    ):
+        position = int(planned_pull_request["position"]) + 1
+        return output_root / f"pr-{position}"
+    if planned_pull_request is not None and planned_pull_request.get("id"):
+        return output_root / _sanitize_filename_part(str(planned_pull_request["id"]))
+    return output_root / "planned-pull-request"
+
+
+def write_binary_artifact(output_file: Path, payload: bytes) -> None:
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "wb",
+        dir=output_file.parent,
+        prefix=f"{output_file.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        temp_path = Path(handle.name)
+        auth_refresh.protect_local_file(temp_path)
+        handle.write(payload)
+    os.replace(temp_path, output_file)
+    auth_refresh.protect_local_file(output_file)
+
+
+def _prototype_code_media_output_root(artifact_root: Path) -> Path:
+    return artifact_root / PROTOTYPE_CODE_MEDIA_DIRNAME
+
+
+def _media_file_suffix(media_type: str | None) -> str:
+    normalized_media_type = str(media_type or "").upper()
+    return MEDIA_FILE_SUFFIX_BY_TYPE.get(normalized_media_type, ".bin")
+
+
+def _parse_s3_bucket_and_key(media_url: str) -> tuple[str, str] | None:
+    parsed_url = urllib_parse.urlparse(media_url)
+    if parsed_url.scheme not in {"http", "https"}:
+        return None
+
+    host = parsed_url.netloc.strip().lower()
+    path = urllib_parse.unquote(parsed_url.path.lstrip("/"))
+    if not host or not path:
+        return None
+
+    if host.endswith(".s3.amazonaws.com"):
+        bucket = host[: -len(".s3.amazonaws.com")]
+        return (bucket, path) if bucket else None
+
+    if ".s3." in host:
+        bucket = host.split(".s3.", 1)[0]
+        return (bucket, path) if bucket else None
+
+    if host == "s3.amazonaws.com" or host.startswith("s3."):
+        bucket, _, key = path.partition("/")
+        return (bucket, key) if bucket and key else None
+
+    return None
+
+
+def _download_private_media_bytes(media_url: str, *, timeout_seconds: float) -> bytes:
+    media_request = urllib_request.Request(media_url, method="GET")
+    try:
+        with urllib_request.urlopen(media_request, timeout=timeout_seconds) as response:
+            return response.read()
+    except urllib_error.HTTPError as exc:
+        if exc.code not in {401, 403}:
+            raise
+    except urllib_error.URLError:
+        pass
+
+    bucket_and_key = _parse_s3_bucket_and_key(media_url)
+    if bucket_and_key is None:
+        raise RuntimeError(
+            "Prototype code media URL is not directly readable and is not a supported S3 URL"
+        )
+
+    try:
+        import boto3
+    except Exception as exc:  # pragma: no cover - dependency/environment failure
+        raise RuntimeError(
+            "Prototype code media URL requires private access and boto3 is unavailable for S3 fallback"
+        ) from exc
+
+    bucket, key = bucket_and_key
+    s3_client = boto3.client("s3")
+    response = s3_client.get_object(Bucket=bucket, Key=key)
+    return response["Body"].read()
+
+
+def _generate_download_information(
+    media_id: str,
+    *,
+    token: str,
+    config: graphql_client.GraphQLRequestConfig,
+) -> tuple[str | None, str | None]:
+    response = graphql_client.execute_graphql(
+        GENERATE_DOWNLOAD_INFORMATION_MUTATION,
+        {"mediaId": media_id},
+        token=token,
+        config=config,
+    )
+    download_information = response.get("generateDownloadInformation") or {}
+    return (
+        download_information.get("url"),
+        download_information.get("expiration"),
+    )
+
+
+def _register_prototype_code_media_reference(
+    collected_media: dict[str, dict[str, Any]],
+    *,
+    prototype_reference: dict[str, Any],
+    source_location: dict[str, Any],
+) -> None:
+    prototype_code_media = prototype_reference.get("prototypeCodeMedia")
+    if not isinstance(prototype_code_media, dict):
+        return
+
+    media_id = prototype_code_media.get("id")
+    if not media_id:
+        return
+
+    collected_entry = collected_media.setdefault(
+        media_id,
+        {
+            "media": prototype_code_media,
+            "prototypeReferences": [],
+            "sourceLocations": [],
+        },
+    )
+    collected_entry["prototypeReferences"].append(prototype_reference)
+    collected_entry["sourceLocations"].append(source_location)
+
+
+def _collect_prototype_code_media_from_pull_request(
+    collected_media: dict[str, dict[str, Any]],
+    *,
+    planned_pull_request: dict[str, Any],
+    source_kind: str,
+) -> None:
+    for specification in planned_pull_request.get("specifications") or []:
+        prototype_reference = specification.get("prototypeReference")
+        if isinstance(prototype_reference, dict):
+            _register_prototype_code_media_reference(
+                collected_media,
+                prototype_reference=prototype_reference,
+                source_location={
+                    "kind": source_kind,
+                    "plannedPullRequestId": planned_pull_request.get("id"),
+                    "plannedPullRequestPosition": planned_pull_request.get("position"),
+                    "plannedPullRequestTitle": planned_pull_request.get("title"),
+                    "specificationId": specification.get("id"),
+                    "title": specification.get("title"),
+                    "target": specification.get("target"),
+                },
+            )
+
+
+def _download_prototype_code_media_artifacts(
+    *,
+    canonical_task_id: str,
+    full_iteration_task_context: dict[str, Any] | None,
+    selected_pull_request: dict[str, Any] | None,
+    token: str,
+    config: graphql_client.GraphQLRequestConfig,
+    timeout_seconds: float,
+) -> list[dict[str, Any]]:
+    collected_media: dict[str, dict[str, Any]] = {}
+
+    current_plan = (full_iteration_task_context or {}).get("currentPlan") or {}
+    for planned_pull_request in current_plan.get("pullRequests") or []:
+        _collect_prototype_code_media_from_pull_request(
+            collected_media,
+            planned_pull_request=planned_pull_request,
+            source_kind="CURRENT_PLAN_PULL_REQUEST_SPECIFICATION",
+        )
+
+    if selected_pull_request is not None:
+        _collect_prototype_code_media_from_pull_request(
+            collected_media,
+            planned_pull_request=selected_pull_request,
+            source_kind="SELECTED_PULL_REQUEST_SPECIFICATION",
+        )
+
+    if not collected_media:
+        return []
+
+    output_root = _prototype_code_media_output_root(
+        _claim_artifact_root(canonical_task_id, selected_pull_request)
+    )
+    downloads: list[dict[str, Any]] = []
+
+    for media_id, collected_entry in sorted(collected_media.items()):
+        media = collected_entry["media"]
+        local_file: str | None = None
+        error_message: str | None = None
+        download_status = "SKIPPED"
+        download_information_expiration: str | None = None
+
+        if str(media.get("status") or "").upper() == "COMPLETED":
+            media_file = (
+                output_root / f"{media_id}{_media_file_suffix(media.get('type'))}"
+            )
+            try:
+                download_url, download_information_expiration = (
+                    _generate_download_information(
+                        media_id,
+                        token=token,
+                        config=config,
+                    )
+                )
+                if not download_url:
+                    raise RuntimeError(
+                        "generateDownloadInformation returned no download URL"
+                    )
+                if not media_file.exists():
+                    payload_bytes = _download_private_media_bytes(
+                        download_url,
+                        timeout_seconds=timeout_seconds,
+                    )
+                    write_binary_artifact(media_file, payload_bytes)
+                local_file = str(media_file)
+                download_status = "DOWNLOADED"
+            except Exception as exc:
+                error_message = str(exc)
+                download_status = "FAILED"
+
+        for prototype_reference in collected_entry["prototypeReferences"]:
+            if local_file is not None:
+                prototype_reference["prototypeCodeMediaLocalFile"] = local_file
+            if error_message is not None:
+                prototype_reference["prototypeCodeMediaDownloadError"] = error_message
+
+        downloads.append(
+            {
+                "mediaId": media_id,
+                "mediaType": media.get("type"),
+                "mediaStatus": media.get("status"),
+                "downloadStatus": download_status,
+                "downloadInformationExpiration": download_information_expiration,
+                "localFile": local_file,
+                "error": error_message,
+                "sourceLocations": collected_entry["sourceLocations"],
+            }
+        )
+
+    return downloads
 
 
 def _extract_execution(planned_pull_request: dict[str, Any] | None) -> dict[str, Any]:
@@ -367,6 +714,7 @@ def run_execution(
             },
             "execution": None,
             "implementationContext": None,
+            "prototypeCodeMediaDownloads": [],
         }
     except Exception as exc:
         return {
@@ -381,6 +729,7 @@ def run_execution(
             },
             "execution": None,
             "implementationContext": None,
+            "prototypeCodeMediaDownloads": [],
         }
 
     try:
@@ -407,6 +756,7 @@ def run_execution(
                 "email": session_payload["account_email"],
             },
             "socialMe": social_me,
+            "prototypeCodeMediaDownloads": [],
         }
 
     iteration_task = next_ready["iterationTask"]
@@ -440,9 +790,18 @@ def run_execution(
                 "email": session_payload["account_email"],
             },
             "socialMe": social_me,
+            "prototypeCodeMediaDownloads": [],
         }
 
     if unavailable_reason:
+        prototype_code_media_downloads = _download_prototype_code_media_artifacts(
+            canonical_task_id=canonical_task_id,
+            full_iteration_task_context=full_iteration_task_context,
+            selected_pull_request=planned_pull_request,
+            token=session_payload["token"],
+            config=request_config,
+            timeout_seconds=30.0,
+        )
         return {
             "status": "UNAVAILABLE",
             "canonicalTaskId": canonical_task_id,
@@ -464,10 +823,19 @@ def run_execution(
                 "email": session_payload["account_email"],
             },
             "socialMe": social_me,
+            "prototypeCodeMediaDownloads": prototype_code_media_downloads,
         }
 
     current_execution = (planned_pull_request.get("execution") or {}).get("status")
     if current_execution and current_execution != "PLANNED":
+        prototype_code_media_downloads = _download_prototype_code_media_artifacts(
+            canonical_task_id=canonical_task_id,
+            full_iteration_task_context=full_iteration_task_context,
+            selected_pull_request=planned_pull_request,
+            token=session_payload["token"],
+            config=request_config,
+            timeout_seconds=30.0,
+        )
         return {
             "status": "UNAVAILABLE",
             "canonicalTaskId": canonical_task_id,
@@ -489,6 +857,7 @@ def run_execution(
                 "email": session_payload["account_email"],
             },
             "socialMe": social_me,
+            "prototypeCodeMediaDownloads": prototype_code_media_downloads,
         }
 
     branch_name = build_branch_name(
@@ -506,6 +875,14 @@ def run_execution(
             config=request_config,
         )["claimPlannedPullRequestExecution"]["plannedPullRequest"]
     except graphql_client.GraphQLError as exc:
+        prototype_code_media_downloads = _download_prototype_code_media_artifacts(
+            canonical_task_id=canonical_task_id,
+            full_iteration_task_context=full_iteration_task_context,
+            selected_pull_request=planned_pull_request,
+            token=session_payload["token"],
+            config=request_config,
+            timeout_seconds=30.0,
+        )
         return {
             "status": "UNAVAILABLE",
             "canonicalTaskId": canonical_task_id,
@@ -527,12 +904,25 @@ def run_execution(
                 "email": session_payload["account_email"],
             },
             "socialMe": social_me,
+            "prototypeCodeMediaDownloads": prototype_code_media_downloads,
         }
 
+    prototype_code_media_downloads = _download_prototype_code_media_artifacts(
+        canonical_task_id=canonical_task_id,
+        full_iteration_task_context=full_iteration_task_context,
+        selected_pull_request=claimed_pull_request,
+        token=session_payload["token"],
+        config=request_config,
+        timeout_seconds=30.0,
+    )
     return {
         "status": "SUCCESS",
         "canonicalTaskId": canonical_task_id,
-        "message": "Claimed the next dependency-ready planned pull request",
+        "message": (
+            "Claimed the next dependency-ready planned pull request and prototype code media artifacts"
+            if prototype_code_media_downloads
+            else "Claimed the next dependency-ready planned pull request"
+        ),
         "iterationTask": iteration_task,
         "plan": {
             "plannedPullRequest": claimed_pull_request,
@@ -550,6 +940,7 @@ def run_execution(
             "email": session_payload["account_email"],
         },
         "socialMe": social_me,
+        "prototypeCodeMediaDownloads": prototype_code_media_downloads,
     }
 
 
