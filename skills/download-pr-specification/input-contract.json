@@ -1,7 +1,7 @@
 {
   "name": "download-pr-specification",
   "description": "Self-contained public skill that downloads the full build specification for a planned pull request within a canonical task.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "input": {
     "type": "object",
     "required": ["canonicalTaskId"],
@@ -50,14 +50,17 @@
       "confirmTotpEnrollment(code)",
       "refreshToken(refreshToken)",
       "socialMe",
-      "getIterationTaskByCanonicalId(canonicalId)"
+      "getIterationTaskByCanonicalId(canonicalId)",
+      "generateDownloadInformation(media)"
     ],
     "outputContains": [
       "full raw task payload",
       "selected planned pull request",
       "source task specification crosswalk",
       "dependency context",
-      "repository hints"
+      "repository hints",
+      "downloaded prototype code media artifacts when present",
+      "explicit prototype UI implementation guidance when prototype patches are attached"
     ]
   },
   "output": {
@@ -94,6 +97,12 @@
       },
       "buildContext": {
         "type": ["object", "null"]
+      },
+      "prototypeImplementationGuidance": {
+        "type": ["object", "null"]
+      },
+      "prototypeCodeMediaDownloads": {
+        "type": ["array", "null"]
       },
       "viewer": {
         "type": ["object", "null"]
