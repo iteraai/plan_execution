@@ -35,7 +35,14 @@ See `input-contract.json`.
 8. Build the branch name as `itera/<canonical-task-id-lower>/pr-<position+1>`.
 9. Claim the PR with `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)`.
 10. Resolve any referenced `prototypeCodeMedia` artifacts through `generateDownloadInformation(media)`, download them to `~/.codex/artifacts/plan_execution/claims/<canonical-task-id-lower>/pr-<position>/prototype_code_media/`, and annotate the returned implementation context with the local file paths.
-11. Return the claimed execution details, suggested branch name, `implementationContext`, and prototype code media download metadata as JSON.
+11. When a prototype patch is attached, return explicit `prototypeImplementationGuidance` that makes patch review mandatory before coding. If the PR includes UI or UX scope, the guidance must say to treat the prototype as the visual source of truth and match it pixel-perfect for UI details and relevant UX, while explicitly excluding prototype logic, APIs, and backend behavior unless separately specified.
+12. Return the claimed execution details, suggested branch name, `implementationContext`, explicit prototype guidance, and prototype code media download metadata as JSON.
+
+## Prototype guardrails
+
+- Downloaded prototype patches are required implementation input, not optional context.
+- If the selected PR includes UI or UX work, the prototype must drive a pixel-perfect implementation of visuals and relevant interactions.
+- Do not copy product logic, API contracts, data flow, or backend behavior from the prototype unless the written specifications separately require that work.
 
 ## Runtime constraints
 

@@ -88,10 +88,10 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
         selected_specification = {
             "id": "spec-1",
             "sourceTaskSpecificationId": "task-spec-1",
-            "type": "CUSTOM",
-            "typeLabel": "Custom",
+            "type": "USER_UI",
+            "typeLabel": "User UI",
             "customTypeLabel": "Custom spec",
-            "title": "Spec title",
+            "title": "Match the prototype dashboard UI",
             "deltaExplanation": "Explain delta",
             "before": "Before",
             "after": "After",
@@ -249,11 +249,23 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
             result["prototypeCodeMediaDownloads"][0]["downloadInformationExpiration"],
             "2026-04-21T00:00:00Z",
         )
+        self.assertTrue(
+            result["prototypeCodeMediaDownloads"][0]["mustReviewBeforeImplementation"]
+        )
         self.assertEqual(
             result["implementationContext"]["selectedPlannedPullRequest"][
                 "specifications"
             ][0]["prototypeReference"]["prototypeCodeMediaLocalFile"],
             result["prototypeCodeMediaDownloads"][0]["localFile"],
+        )
+        self.assertTrue(
+            result["implementationContext"]["selectedPlannedPullRequest"][
+                "prototypeImplementationGuidance"
+            ]["requiresPixelPerfectUiImplementation"]
+        )
+        self.assertIn(
+            "pixel-perfect",
+            result["prototypeImplementationGuidance"]["instructionSummary"],
         )
 
     @mock.patch("execute_approved_plan.ensure_authenticated_context")

@@ -30,9 +30,15 @@ This installs the skill into `~/.codex/skills/download-task-specification`.
    files, through `generateDownloadInformation(media)` and download them to a
    local artifact directory beside the task snapshot while annotating the
    snapshot with those local file paths.
-8. Write the full snapshot to a local JSON artifact so downstream agents can
+8. When a prototype patch is attached, emit explicit prototype implementation
+   guidance that makes patch review mandatory before coding. If the attached
+   prototype is relevant to UI or UX work, the guidance must require a
+   pixel-perfect UI implementation from the prototype while excluding prototype
+   logic, API behavior, and backend behavior unless the written specs
+   separately require them.
+9. Write the full snapshot to a local JSON artifact so downstream agents can
    import it directly.
-9. Return the same snapshot as structured JSON on stdout.
+10. Return the same snapshot as structured JSON on stdout.
 
 ## Runtime entrypoint
 

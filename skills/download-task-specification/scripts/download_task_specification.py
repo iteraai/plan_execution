@@ -326,6 +326,23 @@ PROTOTYPE_CODE_MEDIA_DIRNAME = "prototype_code_media"
 MEDIA_FILE_SUFFIX_BY_TYPE = {
     "PATCH": ".patch",
 }
+UI_SPECIFICATION_TYPE_KEYS = {"USER_UI", "USER_EXPERIENCE"}
+UI_TEXT_SIGNAL_KEYWORDS = (
+    "ui",
+    "user ui",
+    "user interface",
+    "ux",
+    "user experience",
+    "frontend",
+    "front end",
+    "pixel perfect",
+    "visual",
+    "layout",
+    "spacing",
+    "typography",
+    "responsive",
+    "interaction",
+)
 
 
 class AuthRequiredError(RuntimeError):
@@ -363,6 +380,154 @@ def _task_specs_by_id(task: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
+def _normalize_signal_text(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    normalized = value.lower().replace("_", " ").replace("-", " ")
+    return " ".join(normalized.split())
+
+
+def _has_ui_text_signal(values: list[Any]) -> bool:
+    for value in values:
+        normalized = _normalize_signal_text(value)
+        if not normalized:
+            continue
+        padded = f" {normalized} "
+        for keyword in UI_TEXT_SIGNAL_KEYWORDS:
+            if f" {keyword} " in padded:
+                return True
+    return False
+
+
+def _collect_prototype_patch_details(
+    specifications: list[dict[str, Any]],
+) -> tuple[list[str], list[str], list[str]]:
+    media_ids: set[str] = set()
+    local_files: set[str] = set()
+    download_errors: set[str] = set()
+
+    for specification in specifications:
+        prototype_reference = specification.get("prototypeReference") or {}
+        prototype_code_media = prototype_reference.get("prototypeCodeMedia") or {}
+        if str(prototype_code_media.get("type") or "").upper() != "PATCH":
+            continue
+        media_id = prototype_code_media.get("id")
+        if media_id:
+            media_ids.add(str(media_id))
+        local_file = prototype_reference.get("prototypeCodeMediaLocalFile")
+        if local_file:
+            local_files.add(str(local_file))
+        download_error = prototype_reference.get("prototypeCodeMediaDownloadError")
+        if download_error:
+            download_errors.add(str(download_error))
+
+    return sorted(media_ids), sorted(local_files), sorted(download_errors)
+
+
+def _collect_ui_scope_signals(
+    specifications: list[dict[str, Any]],
+    *,
+    context_values: list[Any] | None = None,
+) -> list[str]:
+    signals: list[str] = []
+    specification_types = {
+        str(specification.get("type") or "").upper() for specification in specifications
+    }
+    matched_ui_types = UI_SPECIFICATION_TYPE_KEYS & specification_types
+    if "USER_UI" in matched_ui_types:
+        signals.append("SPECIFICATION_TYPE_USER_UI")
+    if "USER_EXPERIENCE" in matched_ui_types:
+        signals.append("SPECIFICATION_TYPE_USER_EXPERIENCE")
+
+    specification_text_values: list[Any] = []
+    for specification in specifications:
+        specification_text_values.extend(
+            [
+                specification.get("typeLabel"),
+                specification.get("customTypeLabel"),
+                specification.get("title"),
+                specification.get("deltaExplanation"),
+                specification.get("before"),
+                specification.get("after"),
+                specification.get("target"),
+                specification.get("rule"),
+            ]
+        )
+    if _has_ui_text_signal(specification_text_values):
+        signals.append("SPECIFICATION_TEXT_UI_KEYWORDS")
+    if context_values and _has_ui_text_signal(context_values):
+        signals.append("CONTEXT_UI_KEYWORDS")
+    return signals
+
+
+def _build_prototype_patch_instruction_summary(
+    *,
+    has_local_files: bool,
+    is_ui_or_ux_scope: bool,
+) -> str:
+    if not has_local_files:
+        prefix = "Mandatory: resolve the prototype patch download failure before implementation."
+    else:
+        prefix = "Mandatory: open the downloaded prototype patch before writing code."
+
+    if is_ui_or_ux_scope:
+        return (
+            f"{prefix} This work has UI/UX signals, so treat the prototype as the visual "
+            "source of truth and match it pixel-perfect for layout, spacing, sizing, "
+            "typography, states, responsive behavior, and relevant interactions. Do not "
+            "copy logic, data flow, APIs, or backend behavior from the prototype unless "
+            "the written specifications explicitly require that work."
+        )
+
+    return (
+        f"{prefix} Treat it as required implementation context. If this work includes UI "
+        "or UX scope, use the prototype as the visual source of truth for pixel-perfect "
+        "implementation and do not copy prototype logic, APIs, or backend behavior unless "
+        "the written specifications explicitly require that work."
+    )
+
+
+def _build_specification_prototype_guidance(
+    *,
+    scope: str,
+    specifications: list[dict[str, Any]],
+    scope_metadata: dict[str, Any] | None = None,
+    context_values: list[Any] | None = None,
+) -> dict[str, Any] | None:
+    prototype_patch_media_ids, prototype_patch_local_files, download_errors = (
+        _collect_prototype_patch_details(specifications)
+    )
+    if not prototype_patch_media_ids:
+        return None
+
+    ui_scope_signals = _collect_ui_scope_signals(
+        specifications,
+        context_values=context_values,
+    )
+    guidance = {
+        "scope": scope,
+        "requiresPrototypePatchReview": True,
+        "requiresPixelPerfectUiImplementation": bool(ui_scope_signals),
+        "uiScopeSignals": ui_scope_signals,
+        "prototypePatchMediaIds": prototype_patch_media_ids,
+        "prototypePatchLocalFiles": prototype_patch_local_files,
+        "prototypePatchDownloadErrors": download_errors,
+        "instructionSummary": _build_prototype_patch_instruction_summary(
+            has_local_files=bool(prototype_patch_local_files),
+            is_ui_or_ux_scope=bool(ui_scope_signals),
+        ),
+        "requirements": [
+            "Do not start implementation until every referenced prototype patch has been downloaded or the download failure has been resolved.",
+            "Open the downloaded prototype patch before editing code and keep it visible while implementing the affected slice.",
+            "When the work includes UI or UX scope, copy the prototype pixel-perfect for layout, spacing, sizing, typography, states, responsive behavior, and relevant interactions.",
+            "Use the prototype only for UI/UX guidance unless the written specs explicitly say otherwise; do not inherit its business logic, data flow, API contracts, or backend behavior.",
+        ],
+    }
+    if scope_metadata:
+        guidance.update(scope_metadata)
+    return guidance
+
+
 def _enrich_planned_pull_request(
     planned_pull_request: dict[str, Any],
     *,
@@ -382,6 +547,24 @@ def _enrich_planned_pull_request(
             )
         enriched_specifications.append(enriched_specification)
     enriched["specifications"] = enriched_specifications
+    enriched["prototypeImplementationGuidance"] = (
+        _build_specification_prototype_guidance(
+            scope="PLANNED_PULL_REQUEST",
+            specifications=enriched_specifications,
+            scope_metadata={
+                "plannedPullRequestId": planned_pull_request.get("id"),
+                "plannedPullRequestPosition": planned_pull_request.get("position"),
+                "plannedPullRequestTitle": planned_pull_request.get("title"),
+            },
+            context_values=[
+                planned_pull_request.get("title"),
+                planned_pull_request.get("goal"),
+                planned_pull_request.get("deploymentTargetLabel"),
+                *(planned_pull_request.get("allowedPathPrefixes") or []),
+                *(planned_pull_request.get("mainTouchPoints") or []),
+            ],
+        )
+    )
     return enriched
 
 
@@ -457,6 +640,25 @@ def _build_build_context(task: dict[str, Any]) -> dict[str, Any]:
         )
         for planned_pull_request in current_plan.get("pullRequests") or []
     ]
+    task_level_prototype_guidance = _build_specification_prototype_guidance(
+        scope="TASK_SPECIFICATIONS",
+        specifications=task_specifications,
+        scope_metadata={
+            "canonicalTaskId": task.get("canonicalId"),
+            "taskName": task.get("name"),
+        },
+        context_values=[
+            task.get("name"),
+            task.get("goalDescription"),
+            task.get("successCriteria"),
+            task.get("contextProblem"),
+        ],
+    )
+    planned_pull_request_prototype_guidance = [
+        planned_pull_request["prototypeImplementationGuidance"]
+        for planned_pull_request in enriched_pull_requests
+        if planned_pull_request.get("prototypeImplementationGuidance") is not None
+    ]
 
     return {
         "taskSummary": {
@@ -503,6 +705,10 @@ def _build_build_context(task: dict[str, Any]) -> dict[str, Any]:
             task.get("taskRuns") or []
         ),
         "currentHumanBlocker": task.get("currentHumanBlocker"),
+        "prototypeImplementationGuidance": {
+            "taskSpecifications": task_level_prototype_guidance,
+            "plannedPullRequests": planned_pull_request_prototype_guidance,
+        },
         "currentPlan": {
             "id": current_plan.get("id"),
             "taskRunId": current_plan.get("taskRunId"),
@@ -784,6 +990,12 @@ def _download_prototype_code_media_artifacts(
                 "downloadInformationExpiration": download_information_expiration,
                 "localFile": local_file,
                 "error": error_message,
+                "mustReviewBeforeImplementation": True,
+                "usageSummary": (
+                    "Mandatory: inspect this prototype patch before implementation. If the "
+                    "associated work includes UI or UX scope, use it as the pixel-perfect "
+                    "visual reference and do not copy logic or backend behavior from it."
+                ),
                 "sourceLocations": collected_entry["sourceLocations"],
             }
         )
@@ -896,6 +1108,7 @@ def run_download(
         config=request_config,
         timeout_seconds=30.0,
     )
+    build_context = _build_build_context(task)
     result = {
         "status": "SUCCESS",
         "canonicalTaskId": canonical_task_id,
@@ -907,7 +1120,10 @@ def run_download(
         ),
         "snapshotFile": str(snapshot_path),
         "task": task,
-        "buildContext": _build_build_context(task),
+        "buildContext": build_context,
+        "prototypeImplementationGuidance": build_context[
+            "prototypeImplementationGuidance"
+        ],
         "prototypeCodeMediaDownloads": prototype_code_media_downloads,
         "viewer": {
             "username": session_payload["username"],
