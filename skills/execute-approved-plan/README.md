@@ -25,7 +25,7 @@ This installs the skill into `~/.codex/skills/execute-approved-plan`.
 7. Enrich context with `getIterationTask(taskId)` for full plan intent, dependencies, and repository target metadata.
 8. Generate the branch name as `itera/<canonical-task-id-lower>/pr-<position+1>`.
 9. Call `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)` to transition into `IMPLEMENTING` and bind the branch.
-10. Download any referenced prototype code media artifacts, such as `.patch` files, into `~/.codex/artifacts/plan_execution/claims/<canonical-task-id-lower>/pr-<position>/prototype_code_media/` and annotate the returned plan context with those local paths.
+10. Resolve any referenced prototype code media artifacts, such as `.patch` files, through `generateDownloadInformation(media)`, download them into `~/.codex/artifacts/plan_execution/claims/<canonical-task-id-lower>/pr-<position>/prototype_code_media/`, and annotate the returned plan context with those local paths.
 11. Return suggested branch name, execution state, richer implementation context payload, and prototype code media download metadata.
 
 ## Runtime entrypoint

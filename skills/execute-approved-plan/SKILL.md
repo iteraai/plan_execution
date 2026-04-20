@@ -34,7 +34,7 @@ See `input-contract.json`.
 7. If no ready planned pull request exists, surface the unavailable reason and stop.
 8. Build the branch name as `itera/<canonical-task-id-lower>/pr-<position+1>`.
 9. Claim the PR with `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)`.
-10. Download any referenced `prototypeCodeMedia` artifacts, such as `.patch` files, to `~/.codex/artifacts/plan_execution/claims/<canonical-task-id-lower>/pr-<position>/prototype_code_media/` and annotate the returned implementation context with the local file paths.
+10. Resolve any referenced `prototypeCodeMedia` artifacts through `generateDownloadInformation(media)`, download them to `~/.codex/artifacts/plan_execution/claims/<canonical-task-id-lower>/pr-<position>/prototype_code_media/`, and annotate the returned implementation context with the local file paths.
 11. Return the claimed execution details, suggested branch name, `implementationContext`, and prototype code media download metadata as JSON.
 
 ## Runtime constraints

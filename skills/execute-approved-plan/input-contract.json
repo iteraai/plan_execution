@@ -30,6 +30,7 @@
       "socialMe",
       "getNextReadyPlannedPullRequestForTask(canonicalTaskId)",
       "getIterationTask(taskId)",
+      "generateDownloadInformation(media)",
       "claimPlannedPullRequestExecution(plannedPullRequestId, branchName)"
     ],
     "canonicalTaskID": true,

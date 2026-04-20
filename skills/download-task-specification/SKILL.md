@@ -35,7 +35,7 @@ See `input-contract.json`.
 4. Validate the authenticated session with `socialMe`.
 5. Call `getIterationTaskByCanonicalId(canonicalId)`.
 6. Build a coding-oriented context payload with task specifications, questions, runs, repository hints, and current plan data.
-7. When a task or planned PR specification includes `prototypeCodeMedia`, download that private media artifact to a local file next to the task snapshot and record the local path in the JSON output.
+7. When a task or planned PR specification includes `prototypeCodeMedia`, resolve a presigned download URL with `generateDownloadInformation(media)` and download that private media artifact to a local file next to the task snapshot.
 8. Write the full snapshot to `~/.codex/artifacts/plan_execution/specifications/tasks/<canonical-task-id-lower>.json` unless an explicit output path is provided.
 9. Return the same snapshot as JSON, including the artifact path for later imports.
 

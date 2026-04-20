@@ -33,7 +33,8 @@
       "confirmTotpEnrollment(code)",
       "refreshToken(refreshToken)",
       "socialMe",
-      "getIterationTaskByCanonicalId(canonicalId)"
+      "getIterationTaskByCanonicalId(canonicalId)",
+      "generateDownloadInformation(media)"
     ],
     "outputContains": [
       "full raw task payload",

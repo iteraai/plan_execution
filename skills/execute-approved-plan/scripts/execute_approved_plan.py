@@ -58,7 +58,6 @@ query GetNextReadyPlannedPullRequestForTask($canonicalTaskId: IterationTaskCanon
             checkpointId
             prototypeCodeMedia {
               id
-              url
               type
               status
             }
@@ -128,7 +127,6 @@ query GetIterationTaskContext($taskId: IterationTaskID!) {
                               checkpointId
                               prototypeCodeMedia {
                                 id
-                                url
                                 type
                                 status
                               }
@@ -197,7 +195,6 @@ mutation ClaimPlannedPullRequestExecution(
           checkpointId
           prototypeCodeMedia {
             id
-            url
             type
             status
           }
@@ -226,6 +223,14 @@ mutation ClaimPlannedPullRequestExecution(
         providerPullRequestUrl
       }
     }
+  }
+}
+""".strip()
+GENERATE_DOWNLOAD_INFORMATION_MUTATION = """
+mutation GenerateDownloadInformation($mediaId: MediaID!) {
+  generateDownloadInformation(media: $mediaId) {
+    url
+    expiration
   }
 }
 """.strip()
@@ -349,6 +354,25 @@ def _download_private_media_bytes(media_url: str, *, timeout_seconds: float) -> 
     return response["Body"].read()
 
 
+def _generate_download_information(
+    media_id: str,
+    *,
+    token: str,
+    config: graphql_client.GraphQLRequestConfig,
+) -> tuple[str | None, str | None]:
+    response = graphql_client.execute_graphql(
+        GENERATE_DOWNLOAD_INFORMATION_MUTATION,
+        {"mediaId": media_id},
+        token=token,
+        config=config,
+    )
+    download_information = response.get("generateDownloadInformation") or {}
+    return (
+        download_information.get("url"),
+        download_information.get("expiration"),
+    )
+
+
 def _register_prototype_code_media_reference(
     collected_media: dict[str, dict[str, Any]],
     *,
@@ -404,6 +428,8 @@ def _download_prototype_code_media_artifacts(
     canonical_task_id: str,
     full_iteration_task_context: dict[str, Any] | None,
     selected_pull_request: dict[str, Any] | None,
+    token: str,
+    config: graphql_client.GraphQLRequestConfig,
     timeout_seconds: float,
 ) -> list[dict[str, Any]]:
     collected_media: dict[str, dict[str, Any]] = {}
@@ -433,19 +459,30 @@ def _download_prototype_code_media_artifacts(
 
     for media_id, collected_entry in sorted(collected_media.items()):
         media = collected_entry["media"]
-        media_url = str(media.get("url") or "").strip()
         local_file: str | None = None
         error_message: str | None = None
         download_status = "SKIPPED"
+        download_information_expiration: str | None = None
 
-        if media_url and str(media.get("status") or "").upper() == "COMPLETED":
+        if str(media.get("status") or "").upper() == "COMPLETED":
             media_file = (
                 output_root / f"{media_id}{_media_file_suffix(media.get('type'))}"
             )
             try:
+                download_url, download_information_expiration = (
+                    _generate_download_information(
+                        media_id,
+                        token=token,
+                        config=config,
+                    )
+                )
+                if not download_url:
+                    raise RuntimeError(
+                        "generateDownloadInformation returned no download URL"
+                    )
                 if not media_file.exists():
                     payload_bytes = _download_private_media_bytes(
-                        media_url,
+                        download_url,
                         timeout_seconds=timeout_seconds,
                     )
                     write_binary_artifact(media_file, payload_bytes)
@@ -466,8 +503,8 @@ def _download_prototype_code_media_artifacts(
                 "mediaId": media_id,
                 "mediaType": media.get("type"),
                 "mediaStatus": media.get("status"),
-                "sourceUrl": media_url or None,
                 "downloadStatus": download_status,
+                "downloadInformationExpiration": download_information_expiration,
                 "localFile": local_file,
                 "error": error_message,
                 "sourceLocations": collected_entry["sourceLocations"],
@@ -761,6 +798,8 @@ def run_execution(
             canonical_task_id=canonical_task_id,
             full_iteration_task_context=full_iteration_task_context,
             selected_pull_request=planned_pull_request,
+            token=session_payload["token"],
+            config=request_config,
             timeout_seconds=30.0,
         )
         return {
@@ -793,6 +832,8 @@ def run_execution(
             canonical_task_id=canonical_task_id,
             full_iteration_task_context=full_iteration_task_context,
             selected_pull_request=planned_pull_request,
+            token=session_payload["token"],
+            config=request_config,
             timeout_seconds=30.0,
         )
         return {
@@ -838,6 +879,8 @@ def run_execution(
             canonical_task_id=canonical_task_id,
             full_iteration_task_context=full_iteration_task_context,
             selected_pull_request=planned_pull_request,
+            token=session_payload["token"],
+            config=request_config,
             timeout_seconds=30.0,
         )
         return {
@@ -868,6 +911,8 @@ def run_execution(
         canonical_task_id=canonical_task_id,
         full_iteration_task_context=full_iteration_task_context,
         selected_pull_request=claimed_pull_request,
+        token=session_payload["token"],
+        config=request_config,
         timeout_seconds=30.0,
     )
     return {
