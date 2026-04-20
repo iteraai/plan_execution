@@ -1,7 +1,7 @@
 {
   "name": "download-task-specification",
   "description": "Self-contained public skill that downloads the full Itera task specification and coding context for a canonical task ID.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "input": {
     "type": "object",
     "required": ["canonicalTaskId"],
@@ -40,7 +40,8 @@
       "enriched current plan context",
       "repository hints",
       "task run history",
-      "task specifications and questions"
+      "task specifications and questions",
+      "downloaded prototype code media artifacts when present"
     ]
   },
   "output": {
@@ -72,6 +73,9 @@
       },
       "buildContext": {
         "type": ["object", "null"]
+      },
+      "prototypeCodeMediaDownloads": {
+        "type": ["array", "null"]
       },
       "viewer": {
         "type": ["object", "null"]

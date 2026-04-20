@@ -1,7 +1,7 @@
 {
   "name": "execute-approved-plan",
   "description": "Self-contained public skill that logs into Itera, resolves the next dependency-ready planned pull request for an iteration task, and claims it.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "input": {
     "type": "object",
     "required": ["canonicalTaskId"],
@@ -36,11 +36,17 @@
     "nextReadySelection": "Server-side via getNextReadyPlannedPullRequestForTask(canonicalTaskId).",
     "claimedState": "claimPlannedPullRequestExecution",
     "branchSuggestionFormat": "itera/<canonical-task-id-lower>/pr-<position+1>",
+    "prototypeCodeMediaOutputRoot": "~/.codex/artifacts/plan_execution/claims/<canonical-task-id-lower>/pr-<position>/prototype_code_media/",
     "v1ExecutionStates": [
       "PLANNED",
       "IMPLEMENTING",
       "IN_REVIEW",
       "MERGED"
+    ],
+    "outputContains": [
+      "claimed planned pull request execution state",
+      "implementation context with local prototype code media file paths when present",
+      "download metadata for prototype code media artifacts"
     ]
   },
   "output": {
@@ -128,6 +134,9 @@
             }
           }
         }
+      },
+      "prototypeCodeMediaDownloads": {
+        "type": ["array", "null"]
       },
       "execution": {
         "type": ["object", "null"],

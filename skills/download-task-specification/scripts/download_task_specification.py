@@ -9,6 +9,9 @@ from pathlib import Path
 import sys
 import tempfile
 from typing import Any
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -150,6 +153,12 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
           prototypeHandoffArtifactId
           prototypeIterationId
           checkpointId
+          prototypeCodeMedia {
+            id
+            url
+            type
+            status
+          }
           references {
             source
             sourceId
@@ -195,6 +204,12 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
         prototypeHandoffArtifactId
         prototypeIterationId
         checkpointId
+        prototypeCodeMedia {
+          id
+          url
+          type
+          status
+        }
         references {
           source
           sourceId
@@ -266,6 +281,12 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
             prototypeHandoffArtifactId
             prototypeIterationId
             checkpointId
+            prototypeCodeMedia {
+              id
+              url
+              type
+              status
+            }
             references {
               source
               sourceId
@@ -296,6 +317,10 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
 DEFAULT_OUTPUT_ROOT = (
     Path.home() / ".codex" / "artifacts" / "plan_execution" / "specifications"
 )
+PROTOTYPE_CODE_MEDIA_DIRNAME = "prototype_code_media"
+MEDIA_FILE_SUFFIX_BY_TYPE = {
+    "PATCH": ".patch",
+}
 
 
 class AuthRequiredError(RuntimeError):
@@ -506,6 +531,225 @@ def write_json_artifact(output_file: Path, payload: dict[str, Any]) -> None:
     auth_refresh.protect_local_file(output_file)
 
 
+def write_binary_artifact(output_file: Path, payload: bytes) -> None:
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "wb",
+        dir=output_file.parent,
+        prefix=f"{output_file.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        temp_path = Path(handle.name)
+        auth_refresh.protect_local_file(temp_path)
+        handle.write(payload)
+    os.replace(temp_path, output_file)
+    auth_refresh.protect_local_file(output_file)
+
+
+def _prototype_code_media_output_root(snapshot_path: Path) -> Path:
+    return snapshot_path.parent / snapshot_path.stem / PROTOTYPE_CODE_MEDIA_DIRNAME
+
+
+def _media_file_suffix(media_type: str | None) -> str:
+    normalized_media_type = str(media_type or "").upper()
+    return MEDIA_FILE_SUFFIX_BY_TYPE.get(normalized_media_type, ".bin")
+
+
+def _parse_s3_bucket_and_key(media_url: str) -> tuple[str, str] | None:
+    parsed_url = urllib_parse.urlparse(media_url)
+    if parsed_url.scheme not in {"http", "https"}:
+        return None
+
+    host = parsed_url.netloc.strip().lower()
+    path = urllib_parse.unquote(parsed_url.path.lstrip("/"))
+    if not host or not path:
+        return None
+
+    if host.endswith(".s3.amazonaws.com"):
+        bucket = host[: -len(".s3.amazonaws.com")]
+        return (bucket, path) if bucket else None
+
+    if ".s3." in host:
+        bucket = host.split(".s3.", 1)[0]
+        return (bucket, path) if bucket else None
+
+    if host == "s3.amazonaws.com" or host.startswith("s3."):
+        bucket, _, key = path.partition("/")
+        return (bucket, key) if bucket and key else None
+
+    return None
+
+
+def _download_private_media_bytes(media_url: str, *, timeout_seconds: float) -> bytes:
+    media_request = urllib_request.Request(media_url, method="GET")
+    try:
+        with urllib_request.urlopen(media_request, timeout=timeout_seconds) as response:
+            return response.read()
+    except urllib_error.HTTPError as exc:
+        if exc.code not in {401, 403}:
+            raise
+    except urllib_error.URLError:
+        pass
+
+    bucket_and_key = _parse_s3_bucket_and_key(media_url)
+    if bucket_and_key is None:
+        raise RuntimeError(
+            "Prototype code media URL is not directly readable and is not a supported S3 URL"
+        )
+
+    try:
+        import boto3
+    except Exception as exc:  # pragma: no cover - dependency/environment failure
+        raise RuntimeError(
+            "Prototype code media URL requires private access and boto3 is unavailable for S3 fallback"
+        ) from exc
+
+    bucket, key = bucket_and_key
+    s3_client = boto3.client("s3")
+    response = s3_client.get_object(Bucket=bucket, Key=key)
+    return response["Body"].read()
+
+
+def _register_prototype_code_media_reference(
+    collected_media: dict[str, dict[str, Any]],
+    *,
+    prototype_reference: dict[str, Any],
+    source_location: dict[str, Any],
+) -> None:
+    prototype_code_media = prototype_reference.get("prototypeCodeMedia")
+    if not isinstance(prototype_code_media, dict):
+        return
+
+    media_id = prototype_code_media.get("id")
+    if not media_id:
+        return
+
+    collected_entry = collected_media.setdefault(
+        media_id,
+        {
+            "media": prototype_code_media,
+            "prototypeReferences": [],
+            "sourceLocations": [],
+        },
+    )
+    collected_entry["prototypeReferences"].append(prototype_reference)
+    collected_entry["sourceLocations"].append(source_location)
+
+
+def _collect_prototype_code_media(task: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    collected_media: dict[str, dict[str, Any]] = {}
+
+    for specification in task.get("specifications") or []:
+        prototype_reference = specification.get("prototypeReference")
+        if isinstance(prototype_reference, dict):
+            _register_prototype_code_media_reference(
+                collected_media,
+                prototype_reference=prototype_reference,
+                source_location={
+                    "kind": "TASK_SPECIFICATION",
+                    "specificationId": specification.get("id"),
+                    "title": specification.get("title"),
+                    "target": specification.get("target"),
+                },
+            )
+
+    for task_run in task.get("taskRuns") or []:
+        for specification in task_run.get("specifications") or []:
+            prototype_reference = specification.get("prototypeReference")
+            if isinstance(prototype_reference, dict):
+                _register_prototype_code_media_reference(
+                    collected_media,
+                    prototype_reference=prototype_reference,
+                    source_location={
+                        "kind": "TASK_RUN_SPECIFICATION",
+                        "taskRunId": task_run.get("id"),
+                        "phase": task_run.get("phase"),
+                        "specificationId": specification.get("id"),
+                        "title": specification.get("title"),
+                        "target": specification.get("target"),
+                    },
+                )
+
+    current_plan = task.get("currentPlan") or {}
+    for planned_pull_request in current_plan.get("pullRequests") or []:
+        for specification in planned_pull_request.get("specifications") or []:
+            prototype_reference = specification.get("prototypeReference")
+            if isinstance(prototype_reference, dict):
+                _register_prototype_code_media_reference(
+                    collected_media,
+                    prototype_reference=prototype_reference,
+                    source_location={
+                        "kind": "PLANNED_PULL_REQUEST_SPECIFICATION",
+                        "plannedPullRequestId": planned_pull_request.get("id"),
+                        "plannedPullRequestPosition": planned_pull_request.get("position"),
+                        "plannedPullRequestTitle": planned_pull_request.get("title"),
+                        "specificationId": specification.get("id"),
+                        "title": specification.get("title"),
+                        "target": specification.get("target"),
+                    },
+                )
+
+    return collected_media
+
+
+def _download_prototype_code_media_artifacts(
+    task: dict[str, Any],
+    *,
+    snapshot_path: Path,
+    timeout_seconds: float,
+) -> list[dict[str, Any]]:
+    collected_media = _collect_prototype_code_media(task)
+    if not collected_media:
+        return []
+
+    output_root = _prototype_code_media_output_root(snapshot_path)
+    downloads: list[dict[str, Any]] = []
+
+    for media_id, collected_entry in sorted(collected_media.items()):
+        media = collected_entry["media"]
+        media_url = str(media.get("url") or "").strip()
+        local_file: str | None = None
+        error_message: str | None = None
+        download_status = "SKIPPED"
+
+        if media_url and str(media.get("status") or "").upper() == "COMPLETED":
+            media_file = output_root / f"{media_id}{_media_file_suffix(media.get('type'))}"
+            try:
+                if not media_file.exists():
+                    payload_bytes = _download_private_media_bytes(
+                        media_url,
+                        timeout_seconds=timeout_seconds,
+                    )
+                    write_binary_artifact(media_file, payload_bytes)
+                local_file = str(media_file)
+                download_status = "DOWNLOADED"
+            except Exception as exc:
+                error_message = str(exc)
+                download_status = "FAILED"
+
+        for prototype_reference in collected_entry["prototypeReferences"]:
+            if local_file is not None:
+                prototype_reference["prototypeCodeMediaLocalFile"] = local_file
+            if error_message is not None:
+                prototype_reference["prototypeCodeMediaDownloadError"] = error_message
+
+        downloads.append(
+            {
+                "mediaId": media_id,
+                "mediaType": media.get("type"),
+                "mediaStatus": media.get("status"),
+                "sourceUrl": media_url or None,
+                "downloadStatus": download_status,
+                "localFile": local_file,
+                "error": error_message,
+                "sourceLocations": collected_entry["sourceLocations"],
+            }
+        )
+
+    return downloads
+
+
 def ensure_authenticated_context(
     *,
     session_file: Path,
@@ -604,14 +848,24 @@ def run_download(
         }
 
     snapshot_path = (output_file or default_output_file(canonical_task_id)).expanduser()
+    prototype_code_media_downloads = _download_prototype_code_media_artifacts(
+        task,
+        snapshot_path=snapshot_path,
+        timeout_seconds=30.0,
+    )
     result = {
         "status": "SUCCESS",
         "canonicalTaskId": canonical_task_id,
         "downloadedAt": auth_refresh.utc_now(),
-        "message": "Downloaded full iteration task specification snapshot",
+        "message": (
+            "Downloaded full iteration task specification snapshot and prototype code media artifacts"
+            if prototype_code_media_downloads
+            else "Downloaded full iteration task specification snapshot"
+        ),
         "snapshotFile": str(snapshot_path),
         "task": task,
         "buildContext": _build_build_context(task),
+        "prototypeCodeMediaDownloads": prototype_code_media_downloads,
         "viewer": {
             "username": session_payload["username"],
             "email": session_payload["account_email"],

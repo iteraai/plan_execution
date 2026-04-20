@@ -7,7 +7,7 @@ description: Public self-contained skill that logs into Itera, resolves the next
 
 This skill is self-contained. It does not depend on any other local skill or pre-existing auth helper.
 
-It logs the user into Itera with `App: ITERAZ`, persists a refreshable local session, fetches the next dependency-ready planned pull request, claims it, and returns the deterministic branch suggestion plus execution state.
+It logs the user into Itera with `App: ITERAZ`, persists a refreshable local session, fetches the next dependency-ready planned pull request, claims it, downloads referenced prototype code media artifacts, and returns the deterministic branch suggestion plus execution state.
 
 ## Install
 
@@ -34,7 +34,8 @@ See `input-contract.json`.
 7. If no ready planned pull request exists, surface the unavailable reason and stop.
 8. Build the branch name as `itera/<canonical-task-id-lower>/pr-<position+1>`.
 9. Claim the PR with `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)`.
-10. Return the claimed execution details, suggested branch name, and `implementationContext` as JSON.
+10. Download any referenced `prototypeCodeMedia` artifacts, such as `.patch` files, to `~/.codex/artifacts/plan_execution/claims/<canonical-task-id-lower>/pr-<position>/prototype_code_media/` and annotate the returned implementation context with the local file paths.
+11. Return the claimed execution details, suggested branch name, `implementationContext`, and prototype code media download metadata as JSON.
 
 ## Runtime constraints
 
@@ -46,7 +47,7 @@ See `input-contract.json`.
 
 ## Success and error states
 
-- `SUCCESS`: claim was created and branch suggestion is returned.
+- `SUCCESS`: claim was created, branch suggestion is returned, and any downloadable prototype code media artifacts were resolved locally.
 - `AUTH_REQUIRED`: interactive login is disabled and no valid stored session is available.
 - `LOGIN_FAILED`: login, MFA challenge, or enrollment could not be completed.
 - `NO_READY_PR`: there is no dependency-ready planned pull request.
