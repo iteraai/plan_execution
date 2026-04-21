@@ -29,6 +29,10 @@ INSTALL_TARGETS = {
         name="claude",
         default_destination_root=Path.home() / ".claude" / "skills",
     ),
+    "cursor": InstallTarget(
+        name="cursor",
+        default_destination_root=Path(".cursor") / "rules",
+    ),
 }
 DEFAULT_TARGET = "codex"
 CLAUDE_SKILL_FRONTMATTER = {
@@ -66,16 +70,33 @@ def path_for_display(path: Path) -> str:
     return f"~/{relative}"
 
 
+def path_for_target_display(path: Path, *, target: InstallTarget) -> str:
+    if target.name == "cursor":
+        cursor_relative_path = path_for_cursor_project_display(path)
+        if cursor_relative_path is not None:
+            return cursor_relative_path
+    return path_for_display(path)
+
+
+def path_for_cursor_project_display(path: Path) -> str | None:
+    parts = path.expanduser().parts
+    for index in range(len(parts) - 2, -1, -1):
+        if parts[index] == ".cursor" and index + 1 < len(parts):
+            if parts[index + 1] == "rules":
+                return str(Path(*parts[index:]))
+    return None
+
+
 def replace_install_paths(
     content: str,
     *,
     skill_name: str,
-    installed_skill_dir: Path,
+    installed_skill_path_display: str,
 ) -> str:
     default_codex_skill_path = f"~/.codex/skills/{skill_name}"
     return content.replace(
         default_codex_skill_path,
-        path_for_display(installed_skill_dir),
+        installed_skill_path_display,
     )
 
 
@@ -123,7 +144,10 @@ def render_skill_markdown_for_target(
     rendered = replace_install_paths(
         content,
         skill_name=skill_name,
-        installed_skill_dir=installed_skill_dir,
+        installed_skill_path_display=path_for_target_display(
+            installed_skill_dir,
+            target=target,
+        ),
     )
     if target.name != "claude":
         return rendered
@@ -143,7 +167,10 @@ def render_readme_for_target(
     rendered = replace_install_paths(
         content,
         skill_name=skill_name,
-        installed_skill_dir=installed_skill_dir,
+        installed_skill_path_display=path_for_target_display(
+            installed_skill_dir,
+            target=target,
+        ),
     )
     if target.name == "claude":
         rendered = rendered.replace(
@@ -152,7 +179,84 @@ def render_readme_for_target(
         rendered = rendered.replace(
             " public Codex skills ", " public Claude Code skills "
         )
+    if target.name == "cursor":
+        rendered = rendered.replace(
+            " public Codex skill ", " Cursor Agent rule asset bundle "
+        )
+        rendered = rendered.replace(
+            " public Codex skills ", " Cursor Agent rule asset bundles "
+        )
     return rendered
+
+
+def split_frontmatter(content: str) -> tuple[str | None, str]:
+    if not content.startswith("---\n"):
+        return None, content
+
+    closing_marker = content.find("\n---\n", 4)
+    if closing_marker == -1:
+        return None, content
+
+    frontmatter_body = content[4:closing_marker]
+    body = content[closing_marker + len("\n---\n") :]
+    return frontmatter_body, body
+
+
+def get_frontmatter_field(content: str, field: str) -> str | None:
+    frontmatter_body, _ = split_frontmatter(content)
+    if frontmatter_body is None:
+        return None
+
+    for line in frontmatter_body.splitlines():
+        if not line.startswith(f"{field}:"):
+            continue
+        value = line.split(":", 1)[1].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            return value[1:-1]
+        return value
+    return None
+
+
+def render_cursor_rule(
+    skill_markdown_content: str,
+    *,
+    skill_name: str,
+    installed_skill_dir: Path,
+    target: InstallTarget,
+) -> str:
+    description = get_frontmatter_field(skill_markdown_content, "description")
+    if not description:
+        raise ValueError(
+            f"Cursor install requires a description in {skill_name}/SKILL.md"
+        )
+
+    cursor_rule_name = installed_skill_dir.name
+    installed_skill_path_display = path_for_target_display(
+        installed_skill_dir,
+        target=target,
+    )
+
+    return "\n".join(
+        [
+            "---",
+            f"description: {format_yaml_scalar(description)}",
+            "alwaysApply: false",
+            "---",
+            "",
+            f"Use this rule when you need to `{skill_name}`.",
+            "",
+            f"Runtime assets are installed in `{installed_skill_path_display}`.",
+            "",
+            "Primary instructions and contracts:",
+            f"@{cursor_rule_name}/SKILL.md",
+            f"@{cursor_rule_name}/input-contract.json",
+            "",
+        ]
+    )
+
+
+def cursor_rule_path_for_destination(destination_dir: Path) -> Path:
+    return destination_dir.parent / f"{destination_dir.name}.mdc"
 
 
 def render_installed_skill(
@@ -200,6 +304,13 @@ def install_skill(
     destination_dir = destination_dir.expanduser()
     destination_dir.parent.mkdir(parents=True, exist_ok=True)
 
+    if install_target.name == "cursor":
+        return install_cursor_skill(
+            source_dir=source_dir,
+            destination_dir=destination_dir,
+            target=install_target,
+        )
+
     staging_dir = destination_dir.parent / f".{destination_dir.name}.tmp"
     if staging_dir.exists():
         shutil.rmtree(staging_dir)
@@ -221,6 +332,57 @@ def install_skill(
 
     os.replace(staging_dir, destination_dir)
     return destination_dir
+
+
+def install_cursor_skill(
+    *,
+    source_dir: Path,
+    destination_dir: Path,
+    target: InstallTarget,
+) -> Path:
+    staging_dir = destination_dir.parent / f".{destination_dir.name}.tmp"
+    if staging_dir.exists():
+        shutil.rmtree(staging_dir)
+
+    shutil.copytree(
+        source_dir,
+        staging_dir,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+    render_installed_skill(
+        staging_dir,
+        skill_name=source_dir.name,
+        installed_skill_dir=destination_dir,
+        target=target,
+    )
+
+    skill_markdown_path = staging_dir / "SKILL.md"
+    if not skill_markdown_path.exists():
+        raise FileNotFoundError(
+            f"Missing SKILL.md in cursor asset bundle: {source_dir}"
+        )
+
+    rule_path = cursor_rule_path_for_destination(destination_dir)
+    staging_rule_path = rule_path.parent / f".{rule_path.name}.tmp"
+    if staging_rule_path.exists():
+        staging_rule_path.unlink()
+    staging_rule_path.write_text(
+        render_cursor_rule(
+            skill_markdown_path.read_text(),
+            skill_name=source_dir.name,
+            installed_skill_dir=destination_dir,
+            target=target,
+        )
+    )
+
+    if destination_dir.exists():
+        shutil.rmtree(destination_dir)
+    if rule_path.exists():
+        rule_path.unlink()
+
+    os.replace(staging_dir, destination_dir)
+    os.replace(staging_rule_path, rule_path)
+    return rule_path
 
 
 def discover_skill_directories(skills_root: Path = SKILLS_ROOT) -> list[Path]:
@@ -252,11 +414,13 @@ def install_skills(
     destination_root = destination_root.expanduser()
     selected_names = set(skill_names or [])
     installed_paths: list[Path] = []
+    installed_skill_names: set[str] = set()
     discovered = discover_skill_directories(skills_root)
 
     for skill_dir in discovered:
         if selected_names and skill_dir.name not in selected_names:
             continue
+        installed_skill_names.add(skill_dir.name)
         installed_paths.append(
             install_skill(
                 source_dir=skill_dir,
@@ -266,7 +430,6 @@ def install_skills(
         )
 
     if selected_names:
-        installed_skill_names = {path.name for path in installed_paths}
         missing_names = sorted(selected_names - installed_skill_names)
         if missing_names:
             raise FileNotFoundError(
@@ -299,7 +462,7 @@ def main() -> int:
         "--destination-root",
         help=(
             "Destination root directory. Defaults to the target-specific skills "
-            "root, such as ~/.codex/skills or ~/.claude/skills."
+            "root, such as ~/.codex/skills, ~/.claude/skills, or .cursor/rules."
         ),
     )
     parser.add_argument(
