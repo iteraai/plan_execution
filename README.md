@@ -16,14 +16,26 @@ Run `python3 install.py` to install the bundled skills for Codex.
 Run `python3 install.py --target claude` to install the same bundled skills for
 Claude Code.
 
+Run `python3 install.py --target cursor` to install the same bundled runtime
+assets as Cursor project rules.
+
 Default install roots:
 
 - Codex: `~/.codex/skills/<skill-name>`
 - Claude Code: `~/.claude/skills/<skill-name>`
+- Cursor: `.cursor/rules/<skill-name>.mdc` plus `.cursor/rules/<skill-name>/`
+  relative to the current working directory
 
 The installer rewrites each installed `SKILL.md` and per-skill `README.md` so
 the bundled script entrypoints point at the actual installed path for the
 selected target.
+
+Cursor installs are generated as Agent Requested project rules so Cursor can
+decide when to include them. Each generated `.mdc` rule references a colocated
+asset bundle containing the original scripts and contracts. When installing from
+outside the target project root, prefer an explicit destination such as:
+
+`python3 /path/to/plan_execution/install.py --target cursor --destination-root /path/to/project/.cursor/rules`
 
 Runtime auth and artifact storage still defaults to `~/.codex/...` for backward
 compatibility, regardless of which agent target installed the skill.
