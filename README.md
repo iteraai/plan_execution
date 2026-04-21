@@ -1,6 +1,7 @@
 # Plan Execution
 
-`plan_execution` is the public home for reusable Codex skills and, later, a CLI that works with them.
+`plan_execution` is the public home for reusable agent skills and, later, a CLI
+that works with them.
 
 ## Structure
 
@@ -10,10 +11,22 @@ The repository starts as a public skills collection. CLI-related code can be add
 
 ## Install
 
-Run `python3 install.py`.
+Run `python3 install.py` to install the bundled skills for Codex.
 
-The installer copies every bundled skill into `~/.codex/skills/<skill-name>` so end
-users can use them without installing any other local skill.
+Run `python3 install.py --target claude` to install the same bundled skills for
+Claude Code.
+
+Default install roots:
+
+- Codex: `~/.codex/skills/<skill-name>`
+- Claude Code: `~/.claude/skills/<skill-name>`
+
+The installer rewrites each installed `SKILL.md` and per-skill `README.md` so
+the bundled script entrypoints point at the actual installed path for the
+selected target.
+
+Runtime auth and artifact storage still defaults to `~/.codex/...` for backward
+compatibility, regardless of which agent target installed the skill.
 
 ## Available skills
 
