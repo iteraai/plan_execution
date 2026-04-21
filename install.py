@@ -135,8 +135,12 @@ def render_readme_for_target(
         installed_skill_dir=installed_skill_dir,
     )
     if target.name == "claude":
-        rendered = rendered.replace(" public Codex skill ", " public Claude Code skill ")
-        rendered = rendered.replace(" public Codex skills ", " public Claude Code skills ")
+        rendered = rendered.replace(
+            " public Codex skill ", " public Claude Code skill "
+        )
+        rendered = rendered.replace(
+            " public Codex skills ", " public Claude Code skills "
+        )
     return rendered
 
 
