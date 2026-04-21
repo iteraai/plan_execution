@@ -28,6 +28,114 @@ class InstallSkillTests(unittest.TestCase):
                 "print('ok')\n",
             )
 
+    def test_install_skill_renders_claude_paths_and_frontmatter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            source_dir = temp_path / "execute-approved-plan"
+            destination_dir = temp_path / "claude-skills" / "execute-approved-plan"
+            (source_dir / "scripts").mkdir(parents=True)
+            (source_dir / "SKILL.md").write_text(
+                "\n".join(
+                    [
+                        "---",
+                        "name: execute-approved-plan",
+                        "description: Test skill",
+                        "---",
+                        "",
+                        "Install path: `~/.codex/skills/execute-approved-plan`.",
+                        "Run `python3 ~/.codex/skills/execute-approved-plan/scripts/execute_approved_plan.py`.",
+                    ]
+                )
+                + "\n"
+            )
+            (source_dir / "README.md").write_text(
+                "\n".join(
+                    [
+                        "# execute-approved-plan",
+                        "",
+                        "Engineer-facing public Codex skill for tests.",
+                        "Install path: `~/.codex/skills/execute-approved-plan`.",
+                    ]
+                )
+                + "\n"
+            )
+
+            install.install_skill(
+                source_dir=source_dir,
+                destination_dir=destination_dir,
+                target="claude",
+            )
+
+            rendered_skill = (destination_dir / "SKILL.md").read_text()
+            self.assertIn("disable-model-invocation: true", rendered_skill)
+            self.assertIn('argument-hint: "[canonical-task-id]"', rendered_skill)
+            self.assertIn(
+                f"`{install.path_for_display(destination_dir)}`",
+                rendered_skill,
+            )
+            self.assertNotIn("~/.codex/skills/execute-approved-plan", rendered_skill)
+
+            rendered_readme = (destination_dir / "README.md").read_text()
+            self.assertIn("public Claude Code skill", rendered_readme)
+            self.assertIn(
+                f"`{install.path_for_display(destination_dir)}`",
+                rendered_readme,
+            )
+
+    def test_install_skill_uses_source_skill_name_for_custom_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            source_dir = temp_path / "download-pr-specification"
+            destination_dir = temp_path / "claude-skills" / "custom-name"
+            (source_dir / "scripts").mkdir(parents=True)
+            (source_dir / "SKILL.md").write_text(
+                "\n".join(
+                    [
+                        "---",
+                        "name: download-pr-specification",
+                        "description: Test skill",
+                        "---",
+                        "",
+                        "Install path: `~/.codex/skills/download-pr-specification`.",
+                        "Run `python3 ~/.codex/skills/download-pr-specification/scripts/download_pr_specification.py`.",
+                    ]
+                )
+                + "\n"
+            )
+            (source_dir / "README.md").write_text(
+                "\n".join(
+                    [
+                        "# download-pr-specification",
+                        "",
+                        "Engineer-facing public Codex skill for tests.",
+                        "Install path: `~/.codex/skills/download-pr-specification`.",
+                    ]
+                )
+                + "\n"
+            )
+
+            install.install_skill(
+                source_dir=source_dir,
+                destination_dir=destination_dir,
+                target="claude",
+            )
+
+            rendered_skill = (destination_dir / "SKILL.md").read_text()
+            self.assertIn(
+                f"`{install.path_for_display(destination_dir)}`",
+                rendered_skill,
+            )
+            self.assertNotIn(
+                "~/.codex/skills/download-pr-specification",
+                rendered_skill,
+            )
+            self.assertIn("disable-model-invocation: true", rendered_skill)
+            self.assertIn(
+                'argument-hint: "[canonical-task-id] '
+                '[pull-request-position-or-planned-pull-request-id]"',
+                rendered_skill,
+            )
+
     def test_install_skills_installs_discovered_catalog_entries(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
