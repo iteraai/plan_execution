@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import shutil
@@ -32,15 +33,15 @@ INSTALL_TARGETS = {
 DEFAULT_TARGET = "codex"
 CLAUDE_SKILL_FRONTMATTER = {
     "execute-approved-plan": {
-        "disable-model-invocation": "true",
+        "disable-model-invocation": True,
         "argument-hint": "[canonical-task-id]",
     },
     "download-task-specification": {
-        "disable-model-invocation": "true",
+        "disable-model-invocation": True,
         "argument-hint": "[canonical-task-id]",
     },
     "download-pr-specification": {
-        "disable-model-invocation": "true",
+        "disable-model-invocation": True,
         "argument-hint": "[canonical-task-id] [pull-request-position-or-planned-pull-request-id]",
     },
 }
@@ -78,7 +79,7 @@ def replace_install_paths(
     )
 
 
-def upsert_frontmatter_field(content: str, *, field: str, value: str) -> str:
+def upsert_frontmatter_field(content: str, *, field: str, value: object) -> str:
     if not content.startswith("---\n"):
         return content
 
@@ -89,7 +90,7 @@ def upsert_frontmatter_field(content: str, *, field: str, value: str) -> str:
     frontmatter_body = content[4:closing_marker]
     body = content[closing_marker + len("\n---\n") :]
     lines = frontmatter_body.splitlines()
-    replacement = f"{field}: {value}"
+    replacement = f"{field}: {format_yaml_scalar(value)}"
 
     for index, line in enumerate(lines):
         if line.startswith(f"{field}:"):
@@ -100,6 +101,16 @@ def upsert_frontmatter_field(content: str, *, field: str, value: str) -> str:
 
     updated_frontmatter = "\n".join(lines)
     return f"---\n{updated_frontmatter}\n---\n{body}"
+
+
+def format_yaml_scalar(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return json.dumps(str(value))
 
 
 def render_skill_markdown_for_target(
@@ -147,10 +158,10 @@ def render_readme_for_target(
 def render_installed_skill(
     skill_dir: Path,
     *,
+    skill_name: str,
     installed_skill_dir: Path,
     target: InstallTarget,
 ) -> None:
-    skill_name = installed_skill_dir.name
     skill_markdown_path = skill_dir / "SKILL.md"
     if skill_markdown_path.exists():
         skill_markdown_path.write_text(
@@ -200,6 +211,7 @@ def install_skill(
     )
     render_installed_skill(
         staging_dir,
+        skill_name=source_dir.name,
         installed_skill_dir=destination_dir,
         target=install_target,
     )
