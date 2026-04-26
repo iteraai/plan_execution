@@ -5,8 +5,8 @@ description: Public self-contained skill that downloads the full Itera task spec
 
 # Download Task Specification
 
-This skill is self-contained. It does not depend on any other local skill or
-pre-existing auth helper.
+This skill is self-contained when installed. Its script entrypoints are thin
+wrappers around the bundled shared `plan_execution` Python runtime.
 
 It logs the user into Itera with `App: ITERAZ`, persists a refreshable local
 session, fetches the full iteration task payload for a canonical task ID,
@@ -26,7 +26,7 @@ See `input-contract.json`.
 ## Core behavior
 
 1. Run `python3 ~/.codex/skills/download-task-specification/scripts/download_task_specification.py --canonical-task-id <CANONICAL_TASK_ID>`.
-2. If the session file exists at `~/.codex/auth/plan_execution/iteraz.json`, refresh it with `refreshToken(refreshToken)`.
+2. If the target-specific session file exists, refresh it with `refreshToken(refreshToken)`.
 3. If no valid session exists, bootstrap login with:
    - `sendEmailVerificationCode(email)`
    - `loginWithEmailMfa(identifier, code)`
@@ -51,6 +51,7 @@ See `input-contract.json`.
 - Canonical task ID input is required for every invocation.
 - The GraphQL app context is fixed to `ITERAZ`.
 - The GraphQL platform header is fixed to `WEB`.
+- The default session file is target-specific: Codex uses `~/.codex/auth/plan_execution/iteraz.json`, Claude uses `~/.claude/auth/plan_execution/iteraz.json`, Cursor uses `~/.cursor/auth/plan_execution/iteraz.json`, and Copilot/other project-scoped installs use `${XDG_CONFIG_HOME:-~/.config}/plan_execution/auth/iteraz.json`.
 - This skill is a client of GraphQL execution contracts; it is not a source of truth.
 
 ## Success and error states
@@ -61,9 +62,10 @@ See `input-contract.json`.
 - `NOT_FOUND`: no iteration task exists for the canonical task ID.
 - `UNAVAILABLE`: the API call failed or the snapshot could not be produced.
 
-## References
+## Runtime References
 
-- `scripts/auth_login.py`
-- `scripts/auth_refresh.py`
-- `scripts/graphql_client.py`
 - `scripts/download_task_specification.py`
+- `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/graphql_client.py`
+- `scripts/plan_execution/artifacts.py`
+- `scripts/plan_execution/tasks.py`

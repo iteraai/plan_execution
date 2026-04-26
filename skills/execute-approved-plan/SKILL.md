@@ -5,7 +5,7 @@ description: Public self-contained skill that logs into Itera, resolves the next
 
 # Execute Approved Plan
 
-This skill is self-contained. It does not depend on any other local skill or pre-existing auth helper.
+This skill is self-contained when installed. Its script entrypoints are thin wrappers around the bundled shared `plan_execution` Python runtime.
 
 It logs the user into Itera with `App: ITERAZ`, persists a refreshable local session, fetches the next dependency-ready planned pull request, claims it, downloads referenced prototype code media artifacts, and returns the deterministic branch suggestion plus execution state.
 
@@ -21,8 +21,8 @@ See `input-contract.json`.
 
 ## Core behavior
 
-1. Run `python3 ~/.codex/skills/execute-approved-plan/scripts/execute_approved_plan.py --canonical-task-id <CANONICAL_TASK_ID>`.
-2. If the session file exists at `~/.codex/auth/plan_execution/iteraz.json`, refresh it with `refreshToken(refreshToken)`.
+1. Run `python3 ~/.codex/skills/execute-approved-plan/scripts/execute_approved_plan.py --canonical-task-id <CANONICAL_TASK_ID>`. To claim a specific plan entry instead of the next ready one, add `--planned-pull-request-id <ID>`.
+2. If the target-specific session file exists, refresh it with `refreshToken(refreshToken)`.
 3. If no valid session exists, bootstrap login with:
    - `sendEmailVerificationCode(email)`
    - `loginWithEmailMfa(identifier, code)`
@@ -49,6 +49,7 @@ See `input-contract.json`.
 - Canonical task ID input is required for every invocation.
 - The GraphQL app context is fixed to `ITERAZ`.
 - The GraphQL platform header is fixed to `WEB`.
+- The default session file is target-specific: Codex uses `~/.codex/auth/plan_execution/iteraz.json`, Claude uses `~/.claude/auth/plan_execution/iteraz.json`, Cursor uses `~/.cursor/auth/plan_execution/iteraz.json`, and Copilot/other project-scoped installs use `${XDG_CONFIG_HOME:-~/.config}/plan_execution/auth/iteraz.json`.
 - This skill is a client of GraphQL execution contracts; it is not a source of truth.
 - Execution states are limited to `PLANNED`, `IMPLEMENTING`, `IN_REVIEW`, and `MERGED` for v1.
 
@@ -58,11 +59,15 @@ See `input-contract.json`.
 - `AUTH_REQUIRED`: interactive login is disabled and no valid stored session is available.
 - `LOGIN_FAILED`: login, MFA challenge, or enrollment could not be completed.
 - `NO_READY_PR`: there is no dependency-ready planned pull request.
-- `UNAVAILABLE`: the next item is not startable at the moment (already claimed or otherwise blocked).
+- `NOT_FOUND`: no iteration task exists for the canonical task ID when selecting a specific planned PR.
+- `NO_PLAN`: the task has no current approved plan when selecting a specific planned PR.
+- `PR_NOT_FOUND`: the requested planned pull request does not exist in the current plan.
+- `UNAVAILABLE`: the next or selected item is not startable at the moment (already claimed or otherwise blocked).
 
-## References
+## Runtime References
 
-- `scripts/auth_login.py`
-- `scripts/auth_refresh.py`
-- `scripts/graphql_client.py`
 - `scripts/execute_approved_plan.py`
+- `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/graphql_client.py`
+- `scripts/plan_execution/artifacts.py`
+- `scripts/plan_execution/bridge.py`

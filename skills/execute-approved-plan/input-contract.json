@@ -10,13 +10,17 @@
         "type": "string",
         "pattern": "^[A-Z0-9]+-[1-9][0-9]*$",
         "description": "Canonical Itera task ID (for example FRONTPAGE-42)."
+      },
+      "plannedPullRequestId": {
+        "type": "string",
+        "description": "Optional explicit Itera planned pull request ID to claim instead of the next dependency-ready item."
       }
     },
     "additionalProperties": false
   },
   "behavior": {
     "installEntryPoint": "python3 install.py",
-    "sessionFile": "~/.codex/auth/plan_execution/iteraz.json",
+    "sessionFile": "Target-specific default; Codex ~/.codex/auth/plan_execution/iteraz.json, Claude ~/.claude/auth/plan_execution/iteraz.json, Cursor ~/.cursor/auth/plan_execution/iteraz.json, Copilot/other ${XDG_CONFIG_HOME:-~/.config}/plan_execution/auth/iteraz.json",
     "appHeader": "ITERAZ",
     "platformHeader": "WEB",
     "requiredGraphQLCalls": [
@@ -29,12 +33,14 @@
       "refreshToken(refreshToken)",
       "socialMe",
       "getNextReadyPlannedPullRequestForTask(canonicalTaskId)",
+      "getIterationTaskByCanonicalId(canonicalId)",
       "getIterationTask(taskId)",
       "generateDownloadInformation(media)",
       "claimPlannedPullRequestExecution(plannedPullRequestId, branchName)"
     ],
     "canonicalTaskID": true,
-    "nextReadySelection": "Server-side via getNextReadyPlannedPullRequestForTask(canonicalTaskId).",
+    "nextReadySelection": "Server-side via getNextReadyPlannedPullRequestForTask(canonicalTaskId), unless plannedPullRequestId is provided.",
+    "specificSelection": "Task plan lookup via getIterationTaskByCanonicalId(canonicalId), then local planned pull request ID selection.",
     "claimedState": "claimPlannedPullRequestExecution",
     "branchSuggestionFormat": "itera/<canonical-task-id-lower>/pr-<position+1>",
     "prototypeCodeMediaOutputRoot": "~/.codex/artifacts/plan_execution/claims/<canonical-task-id-lower>/pr-<position>/prototype_code_media/",
@@ -66,7 +72,10 @@
           "SUCCESS",
           "AUTH_REQUIRED",
           "LOGIN_FAILED",
+          "NOT_FOUND",
+          "NO_PLAN",
           "NO_READY_PR",
+          "PR_NOT_FOUND",
           "UNAVAILABLE"
         ]
       },

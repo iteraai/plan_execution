@@ -8,6 +8,8 @@ and coding context for a canonical task ID.
 Run `python3 install.py` from the repository root.
 
 This installs the skill into `~/.codex/skills/download-task-specification`.
+The installed script entrypoints delegate to the bundled shared
+`scripts/plan_execution/` runtime.
 
 ## Input
 
@@ -15,7 +17,11 @@ This installs the skill into `~/.codex/skills/download-task-specification`.
 - Optional `outputFile`: explicit JSON artifact path. If omitted, the skill
   writes to `~/.codex/artifacts/plan_execution/specifications/tasks/<canonical-task-id-lower>.json`.
 - The skill handles Itera login internally using `App: ITERAZ` and `Platform: WEB`.
-- The stored session file is `~/.codex/auth/plan_execution/iteraz.json`.
+- The stored session file is target-specific:
+  - Codex: `~/.codex/auth/plan_execution/iteraz.json`
+  - Claude: `~/.claude/auth/plan_execution/iteraz.json`
+  - Cursor: `~/.cursor/auth/plan_execution/iteraz.json`
+  - Copilot or other project-scoped installs: `${XDG_CONFIG_HOME:-~/.config}/plan_execution/auth/iteraz.json`
 
 ## Flow
 
@@ -60,9 +66,10 @@ python3 ~/.codex/skills/download-task-specification/scripts/download_task_specif
 
 Canonical contract in `input-contract.json`.
 
-## Bundled scripts
+## Bundled runtime
 
-- `scripts/auth_login.py`
-- `scripts/auth_refresh.py`
-- `scripts/graphql_client.py`
 - `scripts/download_task_specification.py`
+- `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/graphql_client.py`
+- `scripts/plan_execution/artifacts.py`
+- `scripts/plan_execution/tasks.py`
