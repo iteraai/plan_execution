@@ -16,19 +16,37 @@ Run `python3 install.py` to install the bundled skills for Codex.
 Run `python3 install.py --target claude` to install the same bundled skills for
 Claude Code.
 
+Run `python3 install.py --target copilot` to install the same bundled skills as
+GitHub Copilot project agent skills.
+
 Run `python3 install.py --target cursor` to install the same bundled runtime
 assets as Cursor project rules.
+
+For project-scoped targets such as Copilot and Cursor, run the installer from
+the client repository root or pass `--destination-root` explicitly.
 
 Default install roots:
 
 - Codex: `~/.codex/skills/<skill-name>`
 - Claude Code: `~/.claude/skills/<skill-name>`
+- GitHub Copilot: `.github/skills/<skill-name>` relative to the current working
+  directory
 - Cursor: `.cursor/rules/<skill-name>.mdc` plus `.cursor/rules/<skill-name>/`
   relative to the current working directory
 
 The installer rewrites each installed `SKILL.md` and per-skill `README.md` so
 the bundled script entrypoints point at the actual installed path for the
 selected target.
+
+Copilot installs are native agent skills. Install them from the root of the
+client repository so Copilot cloud agent, Copilot CLI, and VS Code agent mode can
+discover `.github/skills/<skill-name>/SKILL.md`. To install into a shared
+open-standard skill directory instead, pass an explicit destination root such as
+`--destination-root .agents/skills`.
+
+Example from a client repository root:
+
+`python3 /path/to/plan_execution/install.py --target copilot`
 
 Cursor installs are generated as Agent Requested project rules so Cursor can
 decide when to include them. Each generated `.mdc` rule references a colocated
