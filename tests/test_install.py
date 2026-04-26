@@ -49,10 +49,7 @@ class InstallSkillTests(unittest.TestCase):
             )
             self.assertTrue(
                 (
-                    destination_dir
-                    / "scripts"
-                    / "plan_execution"
-                    / "graphql_client.py"
+                    destination_dir / "scripts" / "plan_execution" / "graphql_client.py"
                 ).is_file()
             )
 

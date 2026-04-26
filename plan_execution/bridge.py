@@ -951,7 +951,9 @@ def _run_specific_execution(
             config=request_config,
             timeout_seconds=30.0,
         )
-        message = f"Planned pull request is already in execution state {current_execution}"
+        message = (
+            f"Planned pull request is already in execution state {current_execution}"
+        )
         return {
             "status": "UNAVAILABLE",
             "canonicalTaskId": canonical_task_id,
