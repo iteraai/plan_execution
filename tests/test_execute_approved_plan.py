@@ -446,6 +446,104 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
             "plan-1",
         )
 
+    @mock.patch("execute_approved_plan.ensure_authenticated_context")
+    @mock.patch("execute_approved_plan.graphql_client.execute_graphql")
+    def test_run_execution_claims_specific_planned_pr(
+        self,
+        execute_graphql: mock.Mock,
+        ensure_authenticated_context: mock.Mock,
+    ) -> None:
+        ensure_authenticated_context.return_value = (
+            {
+                "username": "thor",
+                "account_email": "thor@example.com",
+                "token": "access-token",
+            },
+            {"email": "thor@example.com"},
+        )
+        planned_pull_request = {
+            "id": "pr-2",
+            "position": 1,
+            "title": "PR 2",
+            "goal": "Ship the selected slice",
+            "specifications": [],
+            "deploymentTargetLabel": "apps/itera",
+            "allowedPathPrefixes": ["src"],
+            "mainTouchPoints": ["backend"],
+            "modelsToCreate": [],
+            "newApiContracts": [],
+            "repositoryTarget": {
+                "provider": "GITHUB",
+                "owner": "iteraai",
+                "repoName": "Web",
+                "mainBranchName": "main",
+                "basePath": "",
+                "stableRepositoryId": "repo-1",
+            },
+            "execution": {
+                "status": "PLANNED",
+                "branchName": None,
+                "claimedByUser": None,
+            },
+        }
+
+        def graphql_side_effect(
+            query: str,
+            variables: dict[str, object] | None = None,
+            *,
+            token: str | None = None,
+            config: object | None = None,
+        ) -> dict[str, object]:
+            del token, config
+            if "getIterationTaskByCanonicalId" in query:
+                return {
+                    "getIterationTaskByCanonicalId": {
+                        "id": "task-1",
+                        "canonicalId": "FRONTPAGE-42",
+                        "status": "READY_TO_BUILD",
+                        "currentPlan": {
+                            "id": "plan-1",
+                            "pullRequests": [copy.deepcopy(planned_pull_request)],
+                            "pullRequestDependencies": [],
+                        },
+                    }
+                }
+            if "claimPlannedPullRequestExecution" in query:
+                self.assertEqual(
+                    variables,
+                    {
+                        "plannedPullRequestId": "pr-2",
+                        "branchName": "itera/frontpage-42/pr-2",
+                    },
+                )
+                claimed = copy.deepcopy(planned_pull_request)
+                claimed["execution"] = {
+                    "status": "IMPLEMENTING",
+                    "branchName": "itera/frontpage-42/pr-2",
+                    "claimedByUser": {"username": "thor"},
+                    "providerPullRequestNumber": None,
+                    "providerPullRequestUrl": None,
+                }
+                return {
+                    "claimPlannedPullRequestExecution": {
+                        "plannedPullRequest": claimed,
+                    }
+                }
+            self.fail(f"Unexpected GraphQL query: {query}")
+
+        execute_graphql.side_effect = graphql_side_effect
+
+        result = execute_approved_plan.run_execution(
+            "FRONTPAGE-42",
+            planned_pull_request_id="pr-2",
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(
+            result["plan"]["suggestedBranchName"], "itera/frontpage-42/pr-2"
+        )
+        self.assertEqual(result["execution"]["executionState"], "IMPLEMENTING")
+
 
 if __name__ == "__main__":
     unittest.main()

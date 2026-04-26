@@ -28,6 +28,34 @@ class InstallSkillTests(unittest.TestCase):
                 "print('ok')\n",
             )
 
+    def test_install_skill_bundles_shared_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            source_dir = temp_path / "download-task-specification"
+            destination_dir = temp_path / "destination"
+            (source_dir / "scripts").mkdir(parents=True)
+            (source_dir / "SKILL.md").write_text("skill")
+            (source_dir / "scripts" / "download_task_specification.py").write_text(
+                "print('ok')\n"
+            )
+
+            install.install_skill(
+                source_dir=source_dir,
+                destination_dir=destination_dir,
+            )
+
+            self.assertTrue(
+                (destination_dir / "scripts" / "plan_execution" / "auth.py").is_file()
+            )
+            self.assertTrue(
+                (
+                    destination_dir
+                    / "scripts"
+                    / "plan_execution"
+                    / "graphql_client.py"
+                ).is_file()
+            )
+
     def test_install_skill_renders_claude_paths_and_frontmatter(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

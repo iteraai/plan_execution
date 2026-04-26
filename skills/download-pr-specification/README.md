@@ -8,6 +8,8 @@ planned pull request within an Itera task.
 Run `python3 install.py` from the repository root.
 
 This installs the skill into `~/.codex/skills/download-pr-specification`.
+The installed script entrypoints delegate to the bundled shared
+`scripts/plan_execution/` runtime.
 
 ## Input
 
@@ -66,9 +68,10 @@ python3 ~/.codex/skills/download-pr-specification/scripts/download_pr_specificat
 
 Canonical contract in `input-contract.json`.
 
-## Bundled scripts
+## Bundled runtime
 
-- `scripts/auth_login.py`
-- `scripts/auth_refresh.py`
-- `scripts/graphql_client.py`
 - `scripts/download_pr_specification.py`
+- `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/graphql_client.py`
+- `scripts/plan_execution/artifacts.py`
+- `scripts/plan_execution/planned_prs.py`

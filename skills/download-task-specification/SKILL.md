@@ -5,8 +5,8 @@ description: Public self-contained skill that downloads the full Itera task spec
 
 # Download Task Specification
 
-This skill is self-contained. It does not depend on any other local skill or
-pre-existing auth helper.
+This skill is self-contained when installed. Its script entrypoints are thin
+wrappers around the bundled shared `plan_execution` Python runtime.
 
 It logs the user into Itera with `App: ITERAZ`, persists a refreshable local
 session, fetches the full iteration task payload for a canonical task ID,
@@ -61,9 +61,10 @@ See `input-contract.json`.
 - `NOT_FOUND`: no iteration task exists for the canonical task ID.
 - `UNAVAILABLE`: the API call failed or the snapshot could not be produced.
 
-## References
+## Runtime References
 
-- `scripts/auth_login.py`
-- `scripts/auth_refresh.py`
-- `scripts/graphql_client.py`
 - `scripts/download_task_specification.py`
+- `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/graphql_client.py`
+- `scripts/plan_execution/artifacts.py`
+- `scripts/plan_execution/tasks.py`

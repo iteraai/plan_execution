@@ -5,8 +5,8 @@ description: Public self-contained skill that downloads the full build specifica
 
 # Download Planned Pull Request Specification
 
-This skill is self-contained. It does not depend on any other local skill or
-pre-existing auth helper.
+This skill is self-contained when installed. Its script entrypoints are thin
+wrappers around the bundled shared `plan_execution` Python runtime.
 
 It logs the user into Itera with `App: ITERAZ`, persists a refreshable local
 session, fetches the full iteration task payload for a canonical task ID,
@@ -66,9 +66,10 @@ See `input-contract.json`.
 - `PR_NOT_FOUND`: the requested planned pull request does not exist in the current plan.
 - `UNAVAILABLE`: the API call failed or the snapshot could not be produced.
 
-## References
+## Runtime References
 
-- `scripts/auth_login.py`
-- `scripts/auth_refresh.py`
-- `scripts/graphql_client.py`
 - `scripts/download_pr_specification.py`
+- `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/graphql_client.py`
+- `scripts/plan_execution/artifacts.py`
+- `scripts/plan_execution/planned_prs.py`

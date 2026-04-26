@@ -8,6 +8,8 @@ and coding context for a canonical task ID.
 Run `python3 install.py` from the repository root.
 
 This installs the skill into `~/.codex/skills/download-task-specification`.
+The installed script entrypoints delegate to the bundled shared
+`scripts/plan_execution/` runtime.
 
 ## Input
 
@@ -60,9 +62,10 @@ python3 ~/.codex/skills/download-task-specification/scripts/download_task_specif
 
 Canonical contract in `input-contract.json`.
 
-## Bundled scripts
+## Bundled runtime
 
-- `scripts/auth_login.py`
-- `scripts/auth_refresh.py`
-- `scripts/graphql_client.py`
 - `scripts/download_task_specification.py`
+- `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/graphql_client.py`
+- `scripts/plan_execution/artifacts.py`
+- `scripts/plan_execution/tasks.py`

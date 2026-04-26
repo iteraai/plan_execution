@@ -7,10 +7,14 @@ Engineer-facing public Codex skill to begin the next dependency-ready planned pu
 Run `python3 install.py` from the repository root.
 
 This installs the skill into `~/.codex/skills/execute-approved-plan`.
+The installed script entrypoints delegate to the bundled shared
+`scripts/plan_execution/` runtime.
 
 ## Input
 
 - `canonicalTaskId` (required): canonical task ID such as `FRONTPAGE-42`.
+- Optional `plannedPullRequestId`: explicit Itera planned-pull-request ID to
+  claim instead of the next dependency-ready item.
 - The skill handles Itera login internally using `App: ITERAZ` and `Platform: WEB`.
 - The stored session file is `~/.codex/auth/plan_execution/iteraz.json`.
 
@@ -42,6 +46,9 @@ python3 ~/.codex/skills/execute-approved-plan/scripts/execute_approved_plan.py \
 
 - `AUTH_REQUIRED`: a valid stored session is required and interactive login is disabled.
 - `LOGIN_FAILED`: login or MFA enrollment could not be completed.
+- `NOT_FOUND`: the canonical task ID does not resolve to an Itera task when a specific planned PR is requested.
+- `NO_PLAN`: the task does not yet have a current plan when a specific planned PR is requested.
+- `PR_NOT_FOUND`: the requested planned pull request is not in the current plan.
 - `NO_READY_PR`: none available, task already claimed, not in approved state, or no approved plan.
 - `UNAVAILABLE`: temporary service, task-contract, or claim issue.
 
@@ -49,9 +56,10 @@ python3 ~/.codex/skills/execute-approved-plan/scripts/execute_approved_plan.py \
 
 Canonical contract in `input-contract.json`.
 
-## Bundled scripts
+## Bundled runtime
 
-- `scripts/auth_login.py`
-- `scripts/auth_refresh.py`
-- `scripts/graphql_client.py`
 - `scripts/execute_approved_plan.py`
+- `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/graphql_client.py`
+- `scripts/plan_execution/artifacts.py`
+- `scripts/plan_execution/bridge.py`

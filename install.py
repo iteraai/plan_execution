@@ -12,6 +12,7 @@ import sys
 
 REPO_ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = REPO_ROOT / "skills"
+SHARED_RUNTIME_ROOT = REPO_ROOT / "plan_execution"
 
 
 @dataclass(frozen=True)
@@ -331,6 +332,11 @@ def install_skill(
         staging_dir,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
+    shutil.copytree(
+        SHARED_RUNTIME_ROOT,
+        staging_dir / "scripts" / "plan_execution",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
     render_installed_skill(
         staging_dir,
         skill_name=source_dir.name,
@@ -358,6 +364,11 @@ def install_cursor_skill(
     shutil.copytree(
         source_dir,
         staging_dir,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+    shutil.copytree(
+        SHARED_RUNTIME_ROOT,
+        staging_dir / "scripts" / "plan_execution",
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
     render_installed_skill(
