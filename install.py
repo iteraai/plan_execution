@@ -45,6 +45,10 @@ CLAUDE_SKILL_FRONTMATTER = {
         "disable-model-invocation": True,
         "argument-hint": "[canonical-task-id]",
     },
+    "execute-planned-pr": {
+        "disable-model-invocation": True,
+        "argument-hint": "[canonical-task-id] [planned-pull-request-id]",
+    },
     "download-task-specification": {
         "disable-model-invocation": True,
         "argument-hint": "[canonical-task-id]",

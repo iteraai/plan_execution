@@ -75,6 +75,7 @@ compatibility. Runtime auth is target-aware:
 ## Available skills
 
 - [`execute-approved-plan`](skills/execute-approved-plan/): start execution for the next dependency-ready planned pull request using a canonical task ID.
+- [`execute-planned-pr`](skills/execute-planned-pr/): start execution for one exact dependency-ready planned pull request using canonical task ID and planned pull request ID.
 - [`download-task-specification`](skills/download-task-specification/): download the full task specification and coding context for a canonical task ID.
 - [`download-pr-specification`](skills/download-pr-specification/): download the full build specification for a planned pull request within a canonical task.
 
@@ -89,6 +90,18 @@ compatibility. Runtime auth is target-aware:
 - `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)` mutation
 - explicit unavailable states and deterministic branch suggestion
 - current execution state and planned-pull-request metadata
+
+### `execute-planned-pr`
+
+- `canonicalTaskId` and `plannedPullRequestId` inputs
+- self-bootstrapped Itera login using `App: ITERAZ` and `Platform: WEB`
+- stored refreshable session at the target-specific auth path
+- `getIterationTaskByCanonicalId(canonicalId)` query with current plan context
+- exact planned-pull-request ID lookup; no next-ready fallback
+- local startability validation before claiming
+- `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)` mutation
+- deterministic branch suggestion in the format `itera/<canonical-task-id-lower>/pr-<position+1>`
+- implementation context, prototype guidance, artifact paths, and prototype media download metadata
 
 ### `download-task-specification`
 
@@ -116,6 +129,7 @@ compatibility. Runtime auth is target-aware:
 - `plan_execution/tasks.py`
 - `plan_execution/planned_prs.py`
 - `plan_execution/bridge.py`
+- `plan_execution/execute_planned_pr.py`
 - `plan_execution/cli.py`
 
 The files under `skills/*/scripts/` are backwards-compatible wrappers around
@@ -127,7 +141,7 @@ these modules.
 2. If no valid session exists, bootstrap login with `sendEmailVerificationCode(email)` and `loginWithEmailMfa(identifier, code)`.
 3. Complete MFA with TOTP, recovery code, or restricted-session enrollment when required.
 4. Validate the authenticated session with `socialMe`.
-5. Resolve the next dependency-ready planned pull request using `getNextReadyPlannedPullRequestForTask(canonicalTaskId)`, or resolve a specific planned PR by `plannedPullRequestId`.
+5. Resolve the next dependency-ready planned pull request using `getNextReadyPlannedPullRequestForTask(canonicalTaskId)`, or use `execute-planned-pr` to resolve one exact planned PR by `plannedPullRequestId`.
 6. If unavailable, return the explicit reason without claiming anything.
 7. Claim the returned planned pull request with `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)`.
 8. Return a deterministic branch suggestion in the format `itera/<canonical-task-id-lower>/pr-<position+1>`.

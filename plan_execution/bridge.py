@@ -841,6 +841,67 @@ def _select_pull_request_by_id(
     return None
 
 
+def _pull_request_lookup(
+    current_plan: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    if not current_plan:
+        return {}
+    return {
+        planned_pull_request["id"]: planned_pull_request
+        for planned_pull_request in current_plan.get("pullRequests") or []
+        if planned_pull_request.get("id")
+    }
+
+
+def _is_dependency_satisfied(planned_pull_request: dict[str, Any]) -> bool:
+    state = str(planned_pull_request.get("state") or "").upper()
+    execution_state = str(
+        (planned_pull_request.get("execution") or {}).get("status") or ""
+    ).upper()
+    return state in {"MERGED", "DONE"} or execution_state in {"MERGED", "DONE"}
+
+
+def _planned_pull_request_unavailable_reason(
+    current_plan: dict[str, Any] | None,
+    planned_pull_request: dict[str, Any],
+) -> str | None:
+    current_execution = (planned_pull_request.get("execution") or {}).get("status")
+    if current_execution and current_execution != "PLANNED":
+        return f"Planned pull request is already in execution state {current_execution}"
+
+    claimed_by = (planned_pull_request.get("execution") or {}).get("claimedByUser")
+    if claimed_by:
+        username = claimed_by.get("username") if isinstance(claimed_by, dict) else None
+        return (
+            f"Planned pull request is already claimed by {username}"
+            if username
+            else "Planned pull request is already claimed"
+        )
+
+    state = planned_pull_request.get("state")
+    if state and state != "READY_UNCLAIMED":
+        return f"Planned pull request is not dependency-ready; current state is {state}"
+
+    pull_requests_by_id = _pull_request_lookup(current_plan)
+    blocking_dependencies = []
+    selected_pull_request_id = planned_pull_request.get("id")
+    for dependency in (current_plan or {}).get("pullRequestDependencies") or []:
+        if dependency.get("pullRequestId") != selected_pull_request_id:
+            continue
+        upstream = pull_requests_by_id.get(dependency.get("dependsOnPullRequestId"))
+        if upstream is None or not _is_dependency_satisfied(upstream):
+            blocking_dependencies.append(dependency)
+
+    if blocking_dependencies:
+        dependency_ids = ", ".join(
+            str(dependency.get("dependsOnPullRequestId"))
+            for dependency in blocking_dependencies
+        )
+        return f"Planned pull request is blocked by unfinished dependencies: {dependency_ids}"
+
+    return None
+
+
 def _run_specific_execution(
     canonical_task_id: str,
     planned_pull_request_id: str,
@@ -848,6 +909,7 @@ def _run_specific_execution(
     session_payload: dict[str, Any],
     social_me: dict[str, Any],
     request_config: graphql_client.GraphQLRequestConfig,
+    validate_startable: bool = False,
 ) -> dict[str, Any]:
     try:
         task = graphql_client.execute_graphql(
@@ -860,6 +922,7 @@ def _run_specific_execution(
         return {
             "status": "UNAVAILABLE",
             "canonicalTaskId": canonical_task_id,
+            "plannedPullRequestId": planned_pull_request_id,
             "message": str(exc),
             "iterationTask": None,
             "plan": {
@@ -874,12 +937,14 @@ def _run_specific_execution(
             },
             "socialMe": social_me,
             "prototypeCodeMediaDownloads": [],
+            "artifactPaths": [],
         }
 
     if task is None:
         return {
             "status": "NOT_FOUND",
             "canonicalTaskId": canonical_task_id,
+            "plannedPullRequestId": planned_pull_request_id,
             "message": "No iteration task was found for the canonical task ID",
             "iterationTask": None,
             "plan": {
@@ -895,6 +960,7 @@ def _run_specific_execution(
             },
             "socialMe": social_me,
             "prototypeCodeMediaDownloads": [],
+            "artifactPaths": [],
         }
 
     current_plan = task.get("currentPlan")
@@ -902,6 +968,7 @@ def _run_specific_execution(
         return {
             "status": "NO_PLAN",
             "canonicalTaskId": canonical_task_id,
+            "plannedPullRequestId": planned_pull_request_id,
             "message": "The task does not have a current plan",
             "iterationTask": task,
             "plan": {
@@ -917,6 +984,7 @@ def _run_specific_execution(
             },
             "socialMe": social_me,
             "prototypeCodeMediaDownloads": [],
+            "artifactPaths": [],
         }
 
     planned_pull_request = _select_pull_request_by_id(task, planned_pull_request_id)
@@ -924,6 +992,7 @@ def _run_specific_execution(
         return {
             "status": "PR_NOT_FOUND",
             "canonicalTaskId": canonical_task_id,
+            "plannedPullRequestId": planned_pull_request_id,
             "message": f"No current plan entry matched planned pull request ID {planned_pull_request_id}",
             "iterationTask": task,
             "plan": {
@@ -939,10 +1008,22 @@ def _run_specific_execution(
             },
             "socialMe": social_me,
             "prototypeCodeMediaDownloads": [],
+            "artifactPaths": [],
         }
 
-    current_execution = (planned_pull_request.get("execution") or {}).get("status")
-    if current_execution and current_execution != "PLANNED":
+    unavailable_reason = (
+        _planned_pull_request_unavailable_reason(current_plan, planned_pull_request)
+        if validate_startable
+        else None
+    )
+    if unavailable_reason is None:
+        current_execution = (planned_pull_request.get("execution") or {}).get("status")
+        if current_execution and current_execution != "PLANNED":
+            unavailable_reason = (
+                f"Planned pull request is already in execution state {current_execution}"
+            )
+
+    if unavailable_reason:
         prototype_code_media_downloads = _download_prototype_code_media_artifacts(
             canonical_task_id=canonical_task_id,
             full_iteration_task_context=task,
@@ -951,17 +1032,17 @@ def _run_specific_execution(
             config=request_config,
             timeout_seconds=30.0,
         )
-        message = (
-            f"Planned pull request is already in execution state {current_execution}"
-        )
         return {
             "status": "UNAVAILABLE",
             "canonicalTaskId": canonical_task_id,
-            "message": message,
+            "plannedPullRequestId": planned_pull_request_id,
+            "plannedPullRequestTitle": planned_pull_request.get("title"),
+            "plannedPullRequestPosition": planned_pull_request.get("position"),
+            "message": unavailable_reason,
             "iterationTask": task,
             "plan": {
                 "plannedPullRequest": planned_pull_request,
-                "unavailableReason": message,
+                "unavailableReason": unavailable_reason,
                 "suggestedBranchName": None,
             },
             "execution": _extract_execution(planned_pull_request),
@@ -974,6 +1055,11 @@ def _run_specific_execution(
             },
             "socialMe": social_me,
             "prototypeCodeMediaDownloads": prototype_code_media_downloads,
+            "artifactPaths": [
+                download["localFile"]
+                for download in prototype_code_media_downloads
+                if download.get("localFile")
+            ],
         }
 
     branch_name = build_branch_name(
@@ -993,6 +1079,7 @@ def _run_specific_execution(
         return {
             "status": "UNAVAILABLE",
             "canonicalTaskId": canonical_task_id,
+            "plannedPullRequestId": planned_pull_request_id,
             "message": str(exc),
             "iterationTask": task,
             "plan": {
@@ -1010,6 +1097,7 @@ def _run_specific_execution(
             },
             "socialMe": social_me,
             "prototypeCodeMediaDownloads": [],
+            "artifactPaths": [],
         }
 
     prototype_code_media_downloads = _download_prototype_code_media_artifacts(
@@ -1024,6 +1112,10 @@ def _run_specific_execution(
     return {
         "status": "SUCCESS",
         "canonicalTaskId": canonical_task_id,
+        "plannedPullRequestId": planned_pull_request_id,
+        "plannedPullRequestTitle": claimed_pull_request.get("title"),
+        "plannedPullRequestPosition": claimed_pull_request.get("position"),
+        "suggestedBranchName": branch_name,
         "message": (
             "Claimed the selected planned pull request and prototype code media artifacts"
             if prototype_code_media_downloads
@@ -1048,6 +1140,11 @@ def _run_specific_execution(
         },
         "socialMe": social_me,
         "prototypeCodeMediaDownloads": prototype_code_media_downloads,
+        "artifactPaths": [
+            download["localFile"]
+            for download in prototype_code_media_downloads
+            if download.get("localFile")
+        ],
     }
 
 
@@ -1396,6 +1493,67 @@ def main() -> int:
         if result["status"]
         in {"SUCCESS", "NO_READY_PR", "UNAVAILABLE", "AUTH_REQUIRED"}
         else 1
+    )
+
+
+def run_planned_pr_execution(
+    canonical_task_id: str,
+    planned_pull_request_id: str,
+    *,
+    session_file: Path = auth_refresh.DEFAULT_SESSION_FILE,
+    config: graphql_client.GraphQLRequestConfig | None = None,
+    interactive: bool = True,
+) -> dict[str, Any]:
+    request_config = config or graphql_client.GraphQLRequestConfig()
+
+    try:
+        session_payload, social_me = ensure_authenticated_context(
+            session_file=session_file,
+            config=request_config,
+            interactive=interactive,
+        )
+    except AuthRequiredError as exc:
+        return {
+            "status": "AUTH_REQUIRED",
+            "canonicalTaskId": canonical_task_id,
+            "plannedPullRequestId": planned_pull_request_id,
+            "message": str(exc),
+            "iterationTask": None,
+            "plan": {
+                "plannedPullRequest": None,
+                "unavailableReason": str(exc),
+                "suggestedBranchName": None,
+            },
+            "execution": None,
+            "implementationContext": None,
+            "prototypeCodeMediaDownloads": [],
+            "artifactPaths": [],
+        }
+    except Exception as exc:
+        return {
+            "status": "LOGIN_FAILED",
+            "canonicalTaskId": canonical_task_id,
+            "plannedPullRequestId": planned_pull_request_id,
+            "message": str(exc),
+            "iterationTask": None,
+            "plan": {
+                "plannedPullRequest": None,
+                "unavailableReason": str(exc),
+                "suggestedBranchName": None,
+            },
+            "execution": None,
+            "implementationContext": None,
+            "prototypeCodeMediaDownloads": [],
+            "artifactPaths": [],
+        }
+
+    return _run_specific_execution(
+        canonical_task_id,
+        planned_pull_request_id,
+        session_payload=session_payload,
+        social_me=social_me,
+        request_config=request_config,
+        validate_startable=True,
     )
 
 
