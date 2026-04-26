@@ -20,7 +20,7 @@
   },
   "behavior": {
     "installEntryPoint": "python3 install.py",
-    "sessionFile": "~/.codex/auth/plan_execution/iteraz.json",
+    "sessionFile": "Target-specific default; Codex ~/.codex/auth/plan_execution/iteraz.json, Claude ~/.claude/auth/plan_execution/iteraz.json, Cursor ~/.cursor/auth/plan_execution/iteraz.json, Copilot/other ${XDG_CONFIG_HOME:-~/.config}/plan_execution/auth/iteraz.json",
     "appHeader": "ITERAZ",
     "platformHeader": "WEB",
     "requiredGraphQLCalls": [

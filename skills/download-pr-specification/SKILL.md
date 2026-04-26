@@ -27,7 +27,7 @@ See `input-contract.json`.
 ## Core behavior
 
 1. Run `python3 ~/.codex/skills/download-pr-specification/scripts/download_pr_specification.py --canonical-task-id <CANONICAL_TASK_ID> --pull-request-position <N>` or provide `--planned-pull-request-id`.
-2. If the session file exists at `~/.codex/auth/plan_execution/iteraz.json`, refresh it with `refreshToken(refreshToken)`.
+2. If the target-specific session file exists, refresh it with `refreshToken(refreshToken)`.
 3. If no valid session exists, bootstrap login with:
    - `sendEmailVerificationCode(email)`
    - `loginWithEmailMfa(identifier, code)`
@@ -54,6 +54,7 @@ See `input-contract.json`.
 - Exactly one planned pull request selector is required: `pullRequestPosition` or `plannedPullRequestId`.
 - The GraphQL app context is fixed to `ITERAZ`.
 - The GraphQL platform header is fixed to `WEB`.
+- The default session file is target-specific: Codex uses `~/.codex/auth/plan_execution/iteraz.json`, Claude uses `~/.claude/auth/plan_execution/iteraz.json`, Cursor uses `~/.cursor/auth/plan_execution/iteraz.json`, and Copilot/other project-scoped installs use `${XDG_CONFIG_HOME:-~/.config}/plan_execution/auth/iteraz.json`.
 - This skill is a client of GraphQL execution contracts; it is not a source of truth.
 
 ## Success and error states

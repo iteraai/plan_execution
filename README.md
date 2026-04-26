@@ -61,8 +61,16 @@ outside the target project root, prefer an explicit destination such as:
 
 `python3 /path/to/plan_execution/install.py --target cursor --destination-root /path/to/project/.cursor/rules`
 
-Runtime auth and artifact storage still defaults to `~/.codex/...` for backward
-compatibility, regardless of which agent target installed the skill.
+Runtime artifact storage still defaults to `~/.codex/...` for backward
+compatibility. Runtime auth is target-aware:
+
+- Codex: `~/.codex/auth/plan_execution/iteraz.json`
+- Claude Code: `~/.claude/auth/plan_execution/iteraz.json`
+- Cursor: `~/.cursor/auth/plan_execution/iteraz.json`
+- Copilot or other project-scoped installs: `${XDG_CONFIG_HOME:-~/.config}/plan_execution/auth/iteraz.json`
+
+`--session-file`, `PLAN_EXECUTION_SESSION_FILE`, and
+`PLAN_EXECUTION_AUTH_ROOT` can override the default.
 
 ## Available skills
 
@@ -76,7 +84,7 @@ compatibility, regardless of which agent target installed the skill.
 
 - `canonicalTaskId` input (for example `FRONTPAGE-42`)
 - self-bootstrapped Itera login using `App: ITERAZ` and `Platform: WEB`
-- stored refreshable session at `~/.codex/auth/plan_execution/iteraz.json`
+- stored refreshable session at the target-specific auth path
 - `getNextReadyPlannedPullRequestForTask(canonicalTaskId)` query
 - `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)` mutation
 - explicit unavailable states and deterministic branch suggestion
@@ -86,7 +94,7 @@ compatibility, regardless of which agent target installed the skill.
 
 - `canonicalTaskId` input (for example `FRONTPAGE-42`)
 - self-bootstrapped Itera login using `App: ITERAZ` and `Platform: WEB`
-- stored refreshable session at `~/.codex/auth/plan_execution/iteraz.json`
+- stored refreshable session at the target-specific auth path
 - `getIterationTaskByCanonicalId(canonicalId)` query
 - raw task payload plus derived build context for coding
 - default JSON artifact at `~/.codex/artifacts/plan_execution/specifications/tasks/<canonical-task-id-lower>.json`
@@ -95,7 +103,7 @@ compatibility, regardless of which agent target installed the skill.
 
 - `canonicalTaskId` plus `pullRequestPosition` or `plannedPullRequestId`
 - self-bootstrapped Itera login using `App: ITERAZ` and `Platform: WEB`
-- stored refreshable session at `~/.codex/auth/plan_execution/iteraz.json`
+- stored refreshable session at the target-specific auth path
 - `getIterationTaskByCanonicalId(canonicalId)` query with full plan context
 - selected planned-pull-request snapshot plus source task specification crosswalk
 - default JSON artifact under `~/.codex/artifacts/plan_execution/specifications/planned_pull_requests/`
@@ -115,7 +123,7 @@ these modules.
 
 ## Plan execution flow at a glance
 
-1. Refresh the stored session if `~/.codex/auth/plan_execution/iteraz.json` exists.
+1. Refresh the stored session if the target-specific auth file exists.
 2. If no valid session exists, bootstrap login with `sendEmailVerificationCode(email)` and `loginWithEmailMfa(identifier, code)`.
 3. Complete MFA with TOTP, recovery code, or restricted-session enrollment when required.
 4. Validate the authenticated session with `socialMe`.

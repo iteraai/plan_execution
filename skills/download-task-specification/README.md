@@ -17,7 +17,11 @@ The installed script entrypoints delegate to the bundled shared
 - Optional `outputFile`: explicit JSON artifact path. If omitted, the skill
   writes to `~/.codex/artifacts/plan_execution/specifications/tasks/<canonical-task-id-lower>.json`.
 - The skill handles Itera login internally using `App: ITERAZ` and `Platform: WEB`.
-- The stored session file is `~/.codex/auth/plan_execution/iteraz.json`.
+- The stored session file is target-specific:
+  - Codex: `~/.codex/auth/plan_execution/iteraz.json`
+  - Claude: `~/.claude/auth/plan_execution/iteraz.json`
+  - Cursor: `~/.cursor/auth/plan_execution/iteraz.json`
+  - Copilot or other project-scoped installs: `${XDG_CONFIG_HOME:-~/.config}/plan_execution/auth/iteraz.json`
 
 ## Flow
 

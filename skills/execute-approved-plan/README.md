@@ -16,7 +16,11 @@ The installed script entrypoints delegate to the bundled shared
 - Optional `plannedPullRequestId`: explicit Itera planned-pull-request ID to
   claim instead of the next dependency-ready item.
 - The skill handles Itera login internally using `App: ITERAZ` and `Platform: WEB`.
-- The stored session file is `~/.codex/auth/plan_execution/iteraz.json`.
+- The stored session file is target-specific:
+  - Codex: `~/.codex/auth/plan_execution/iteraz.json`
+  - Claude: `~/.claude/auth/plan_execution/iteraz.json`
+  - Cursor: `~/.cursor/auth/plan_execution/iteraz.json`
+  - Copilot or other project-scoped installs: `${XDG_CONFIG_HOME:-~/.config}/plan_execution/auth/iteraz.json`
 
 ## Flow
 

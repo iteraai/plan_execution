@@ -88,6 +88,28 @@ class AuthRefreshTests(unittest.TestCase):
         self.assertEqual(refreshed["token"], "token-2")
         self.assertEqual(refreshed["refresh_token"], "refresh-2")
 
+    def test_default_auth_root_uses_agent_specific_locations(self) -> None:
+        home = Path.home()
+        self.assertEqual(
+            auth_refresh.default_auth_root_for_target("codex"),
+            home / ".codex" / "auth" / "plan_execution",
+        )
+        self.assertEqual(
+            auth_refresh.default_auth_root_for_target("claude"),
+            home / ".claude" / "auth" / "plan_execution",
+        )
+        self.assertEqual(
+            auth_refresh.default_auth_root_for_target("cursor"),
+            home / ".cursor" / "auth" / "plan_execution",
+        )
+
+    def test_default_auth_root_for_copilot_uses_neutral_config_home(self) -> None:
+        with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": "/tmp/config-home"}):
+            self.assertEqual(
+                auth_refresh.default_auth_root_for_target("copilot"),
+                Path("/tmp/config-home") / "plan_execution" / "auth",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

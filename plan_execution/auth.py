@@ -18,9 +18,17 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import graphql_client
 
-DEFAULT_SESSION_FILE = (
-    Path.home() / ".codex" / "auth" / "plan_execution" / "iteraz.json"
+SESSION_FILENAME = "iteraz.json"
+SESSION_ENV_VAR = "PLAN_EXECUTION_SESSION_FILE"
+AUTH_ROOT_ENV_VAR = "PLAN_EXECUTION_AUTH_ROOT"
+LEGACY_CODEX_SESSION_FILE = (
+    Path.home() / ".codex" / "auth" / "plan_execution" / SESSION_FILENAME
 )
+AGENT_AUTH_ROOTS = {
+    "codex": Path.home() / ".codex" / "auth" / "plan_execution",
+    "claude": Path.home() / ".claude" / "auth" / "plan_execution",
+    "cursor": Path.home() / ".cursor" / "auth" / "plan_execution",
+}
 REFRESH_TOKEN_MUTATION = """
 mutation RefreshToken($refreshToken: String!) {
   refreshToken(refreshToken: $refreshToken) {
@@ -58,6 +66,43 @@ WINDOWS_PERMISSION_FALLBACK_WARNING = (
 )
 _warned_about_windows_permission_fallback = False
 auth_refresh = sys.modules[__name__]
+
+
+def _xdg_config_home() -> Path:
+    configured = os.environ.get("XDG_CONFIG_HOME")
+    if configured:
+        return Path(configured).expanduser()
+    return Path.home() / ".config"
+
+
+def _installed_target() -> str | None:
+    try:
+        from install_context import INSTALL_TARGET
+    except Exception:
+        return None
+    return str(INSTALL_TARGET or "").strip().lower() or None
+
+
+def default_auth_root_for_target(target: str | None = None) -> Path:
+    normalized_target = str(target or _installed_target() or "codex").lower()
+    if normalized_target in AGENT_AUTH_ROOTS:
+        return AGENT_AUTH_ROOTS[normalized_target]
+    return _xdg_config_home() / "plan_execution" / "auth"
+
+
+def default_session_file() -> Path:
+    explicit_session_file = os.environ.get(SESSION_ENV_VAR)
+    if explicit_session_file:
+        return Path(explicit_session_file).expanduser()
+
+    explicit_auth_root = os.environ.get(AUTH_ROOT_ENV_VAR)
+    if explicit_auth_root:
+        return Path(explicit_auth_root).expanduser() / SESSION_FILENAME
+
+    return default_auth_root_for_target() / SESSION_FILENAME
+
+
+DEFAULT_SESSION_FILE = default_session_file()
 
 
 def utc_now() -> str:
