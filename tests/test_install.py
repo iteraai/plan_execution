@@ -82,6 +82,70 @@ class InstallSkillTests(unittest.TestCase):
                 rendered_readme,
             )
 
+    def test_install_skill_renders_copilot_project_skill_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            source_dir = temp_path / "download-task-specification"
+            destination_dir = (
+                temp_path
+                / "project"
+                / ".github"
+                / "skills"
+                / "download-task-specification"
+            )
+            (source_dir / "scripts").mkdir(parents=True)
+            (source_dir / "SKILL.md").write_text(
+                "\n".join(
+                    [
+                        "---",
+                        "name: download-task-specification",
+                        "description: Test skill",
+                        "---",
+                        "",
+                        "Install path: `~/.codex/skills/download-task-specification`.",
+                        "Run `python3 ~/.codex/skills/download-task-specification/scripts/download_task_specification.py`.",
+                    ]
+                )
+                + "\n"
+            )
+            (source_dir / "README.md").write_text(
+                "\n".join(
+                    [
+                        "# download-task-specification",
+                        "",
+                        "Engineer-facing public Codex skill for tests.",
+                        "Install path: `~/.codex/skills/download-task-specification`.",
+                    ]
+                )
+                + "\n"
+            )
+
+            installed_path = install.install_skill(
+                source_dir=source_dir,
+                destination_dir=destination_dir,
+                target="copilot",
+            )
+
+            self.assertEqual(installed_path, destination_dir)
+
+            rendered_skill = (destination_dir / "SKILL.md").read_text()
+            self.assertIn(
+                f"`{install.path_for_display(destination_dir)}`",
+                rendered_skill,
+            )
+            self.assertNotIn(
+                "~/.codex/skills/download-task-specification",
+                rendered_skill,
+            )
+            self.assertIn("description: Test skill", rendered_skill)
+
+            rendered_readme = (destination_dir / "README.md").read_text()
+            self.assertIn("GitHub Copilot agent skill", rendered_readme)
+            self.assertIn(
+                f"`{install.path_for_display(destination_dir)}`",
+                rendered_readme,
+            )
+
     def test_install_skill_uses_source_skill_name_for_custom_destination(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

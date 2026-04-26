@@ -29,6 +29,10 @@ INSTALL_TARGETS = {
         name="claude",
         default_destination_root=Path.home() / ".claude" / "skills",
     ),
+    "copilot": InstallTarget(
+        name="copilot",
+        default_destination_root=Path(".github") / "skills",
+    ),
     "cursor": InstallTarget(
         name="cursor",
         default_destination_root=Path(".cursor") / "rules",
@@ -178,6 +182,13 @@ def render_readme_for_target(
         )
         rendered = rendered.replace(
             " public Codex skills ", " public Claude Code skills "
+        )
+    if target.name == "copilot":
+        rendered = rendered.replace(
+            " public Codex skill ", " GitHub Copilot agent skill "
+        )
+        rendered = rendered.replace(
+            " public Codex skills ", " GitHub Copilot agent skills "
         )
     if target.name == "cursor":
         rendered = rendered.replace(
@@ -462,7 +473,8 @@ def main() -> int:
         "--destination-root",
         help=(
             "Destination root directory. Defaults to the target-specific skills "
-            "root, such as ~/.codex/skills, ~/.claude/skills, or .cursor/rules."
+            "root, such as ~/.codex/skills, ~/.claude/skills, .github/skills, "
+            "or .cursor/rules."
         ),
     )
     parser.add_argument(
