@@ -1,0 +1,94 @@
+{
+  "name": "execute-planned-pr",
+  "description": "Self-contained public skill that logs into Itera, claims exactly one dependency-ready planned pull request by plannedPullRequestId, and returns implementation context.",
+  "version": "1.0.0",
+  "input": {
+    "type": "object",
+    "required": ["canonicalTaskId", "plannedPullRequestId"],
+    "properties": {
+      "canonicalTaskId": {
+        "type": "string",
+        "pattern": "^[A-Z0-9]+-[1-9][0-9]*$",
+        "description": "Canonical Itera task ID (for example FRONTPAGE-42)."
+      },
+      "plannedPullRequestId": {
+        "type": "string",
+        "description": "Exact Itera planned pull request ID to claim."
+      }
+    },
+    "additionalProperties": false
+  },
+  "behavior": {
+    "installEntryPoint": "python3 install.py",
+    "cli": "python3 ~/.codex/skills/execute-planned-pr/scripts/execute_planned_pr.py --canonical-task-id <TASK_ID> --planned-pull-request-id <PLANNED_PR_ID>",
+    "sessionFile": "Target-specific default; Codex ~/.codex/auth/plan_execution/iteraz.json, Claude ~/.claude/auth/plan_execution/iteraz.json, Cursor ~/.cursor/auth/plan_execution/iteraz.json, Copilot/other ${XDG_CONFIG_HOME:-~/.config}/plan_execution/auth/iteraz.json",
+    "appHeader": "ITERAZ",
+    "platformHeader": "WEB",
+    "requiredGraphQLCalls": [
+      "sendEmailVerificationCode(email)",
+      "loginWithEmailMfa(identifier, code)",
+      "completeEmailLoginWithTotp(challengeId, code)",
+      "completeEmailLoginWithRecoveryCode(challengeId, code)",
+      "beginTotpEnrollment",
+      "confirmTotpEnrollment(code)",
+      "refreshToken(refreshToken)",
+      "socialMe",
+      "getIterationTaskByCanonicalId(canonicalId)",
+      "generateDownloadInformation(media)",
+      "claimPlannedPullRequestExecution(plannedPullRequestId, branchName)"
+    ],
+    "specificSelection": "Task plan lookup via getIterationTaskByCanonicalId(canonicalId), then exact planned pull request ID selection.",
+    "startabilityValidation": "Selected PR execution must be PLANNED/unclaimed, READY_UNCLAIMED when plan state is present, and all declared dependencies must be complete.",
+    "claimedState": "claimPlannedPullRequestExecution",
+    "branchSuggestionFormat": "itera/<canonical-task-id-lower>/pr-<position+1>",
+    "prototypeCodeMediaOutputRoot": "~/.codex/artifacts/plan_execution/claims/<canonical-task-id-lower>/pr-<position>/prototype_code_media/",
+    "outputContains": [
+      "status",
+      "canonicalTaskId",
+      "plannedPullRequestId",
+      "plannedPullRequestTitle",
+      "plannedPullRequestPosition",
+      "suggestedBranchName",
+      "execution",
+      "implementationContext",
+      "prototypeImplementationGuidance",
+      "artifactPaths",
+      "prototypeCodeMediaDownloads"
+    ]
+  },
+  "output": {
+    "type": "object",
+    "required": ["status", "canonicalTaskId", "plannedPullRequestId"],
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "SUCCESS",
+          "AUTH_REQUIRED",
+          "LOGIN_FAILED",
+          "NOT_FOUND",
+          "NO_PLAN",
+          "PR_NOT_FOUND",
+          "UNAVAILABLE"
+        ]
+      },
+      "canonicalTaskId": { "type": "string" },
+      "plannedPullRequestId": { "type": "string" },
+      "plannedPullRequestTitle": { "type": ["string", "null"] },
+      "plannedPullRequestPosition": { "type": ["integer", "null"] },
+      "suggestedBranchName": { "type": ["string", "null"] },
+      "execution": { "type": ["object", "null"] },
+      "implementationContext": { "type": ["object", "null"] },
+      "prototypeImplementationGuidance": { "type": ["object", "null"] },
+      "artifactPaths": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "prototypeCodeMediaDownloads": {
+        "type": "array",
+        "items": { "type": "object" }
+      },
+      "message": { "type": ["string", "null"] }
+    }
+  }
+}
