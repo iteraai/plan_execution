@@ -172,6 +172,13 @@ class AuthLoginTests(unittest.TestCase):
         self.assertIn("code-two", "\n".join(recovery_lines))
         write_session.assert_called_once()
 
+    def test_secret_prompt_uses_imported_getpass(self) -> None:
+        with mock.patch("auth_login.getpass", return_value="123456") as getpass_mock:
+            value = auth_login._prompt_value("Email verification code", secret=True)
+
+        self.assertEqual(value, "123456")
+        getpass_mock.assert_called_once_with("Email verification code: ")
+
     def test_auth_login_script_copies_stay_in_sync(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         canonical = (
