@@ -6,7 +6,7 @@ Engineer-facing public Codex skill for claiming one exact dependency-ready Itera
 
 Install:
 
-`python3 install.py --skill execute-planned-pr`
+`python3 install.py --codex --skill execute-planned-pr`
 
 Run:
 
