@@ -40,6 +40,7 @@ INSTALL_TARGETS = {
     ),
 }
 DEFAULT_TARGET = "codex"
+ALL_TARGETS = "all"
 CLAUDE_SKILL_FRONTMATTER = {
     "execute-approved-plan": {
         "disable-model-invocation": True,
@@ -65,6 +66,40 @@ def get_install_target(name: str) -> InstallTarget:
         return INSTALL_TARGETS[name]
     except KeyError as exc:
         raise ValueError(f"Unsupported install target: {name}") from exc
+
+
+def prompt_for_install_targets() -> list[InstallTarget]:
+    if not sys.stdin.isatty():
+        raise ValueError(
+            "No install target selected. Pass one of --codex, --claude, "
+            "--copilot, --cursor, --all, or --target."
+        )
+
+    options = [
+        (ALL_TARGETS, "All targets"),
+        *[(target_name, target_name) for target_name in INSTALL_TARGETS],
+    ]
+    print("Select install target:")
+    for index, (_, label) in enumerate(options, start=1):
+        print(f"  {index}. {label}")
+
+    while True:
+        selection = input("Target: ").strip().lower()
+        for index, (target_name, _) in enumerate(options, start=1):
+            if selection in {str(index), target_name}:
+                return selected_install_targets(target_name)
+        print(
+            "Enter a number or one of: "
+            + ", ".join(target_name for target_name, _ in options)
+        )
+
+
+def selected_install_targets(selection: str | None) -> list[InstallTarget]:
+    if selection is None:
+        return prompt_for_install_targets()
+    if selection == ALL_TARGETS:
+        return [INSTALL_TARGETS[target_name] for target_name in INSTALL_TARGETS]
+    return [get_install_target(selection)]
 
 
 def path_for_display(path: Path) -> str:
@@ -493,11 +528,29 @@ def main() -> int:
             "skills directory."
         )
     )
-    parser.add_argument(
+    target_group = parser.add_mutually_exclusive_group()
+    target_group.add_argument(
         "--target",
-        default=DEFAULT_TARGET,
-        choices=sorted(INSTALL_TARGETS),
-        help="Agent target to install for. Defaults to codex.",
+        choices=[*INSTALL_TARGETS, ALL_TARGETS],
+        help=(
+            "Agent target to install for. Use 'all' to install every target. "
+            "If omitted, prompts for a target."
+        ),
+    )
+    for target_name in INSTALL_TARGETS:
+        target_group.add_argument(
+            f"--{target_name}",
+            action="store_const",
+            const=target_name,
+            dest="target_flag",
+            help=f"Install for {target_name}.",
+        )
+    target_group.add_argument(
+        "--all",
+        action="store_const",
+        const=ALL_TARGETS,
+        dest="target_flag",
+        help="Install for every supported target.",
     )
     parser.add_argument(
         "--skill",
@@ -521,29 +574,42 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
-    install_target = get_install_target(args.target)
-    destination_root = (
-        Path(args.destination_root)
-        if args.destination_root
-        else install_target.default_destination_root
-    )
+    target_selection = args.target_flag or args.target
+    install_targets = selected_install_targets(target_selection)
 
-    if args.destination:
-        if not args.skills or len(args.skills) != 1:
-            raise ValueError("--destination requires exactly one --skill value")
-        source_dir = SKILLS_ROOT / args.skills[0]
-        installed_paths = [
-            install_skill(
-                source_dir=source_dir,
-                destination_dir=Path(args.destination),
+    if len(install_targets) > 1 and (args.destination or args.destination_root):
+        raise ValueError(
+            "--all cannot be combined with --destination or --destination-root"
+        )
+
+    installed_paths: list[Path] = []
+    for install_target in install_targets:
+        destination_root = (
+            Path(args.destination_root)
+            if args.destination_root
+            else install_target.default_destination_root
+        )
+        if args.destination:
+            if not args.skills or len(args.skills) != 1:
+                raise ValueError("--destination requires exactly one --skill value")
+            source_dir = SKILLS_ROOT / args.skills[0]
+            installed_paths.extend(
+                [
+                    install_skill(
+                        source_dir=source_dir,
+                        destination_dir=Path(args.destination),
+                        target=install_target,
+                    )
+                ]
+            )
+            continue
+
+        installed_paths.extend(
+            install_skills(
+                skill_names=args.skills,
+                destination_root=destination_root,
                 target=install_target,
             )
-        ]
-    else:
-        installed_paths = install_skills(
-            skill_names=args.skills,
-            destination_root=destination_root,
-            target=install_target,
         )
 
     for installed_path in installed_paths:

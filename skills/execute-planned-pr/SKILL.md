@@ -11,9 +11,11 @@ Use this skill for Itera web UI "Move to agent" prompts that include both `canon
 
 ## Install
 
-Run `python3 install.py` from the repository root.
+Run `python3 install.py` from the repository root to choose an install target,
+or pass a target flag such as `--codex`.
 
-The installer copies this skill into `~/.codex/skills/execute-planned-pr`.
+For Codex, the installer copies this skill into
+`~/.codex/skills/execute-planned-pr`.
 
 ## Input Contract
 

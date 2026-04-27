@@ -5,9 +5,11 @@ and coding context for a canonical task ID.
 
 ## Install
 
-Run `python3 install.py` from the repository root.
+Run `python3 install.py` from the repository root to choose an install target,
+or pass a target flag such as `--codex`.
 
-This installs the skill into `~/.codex/skills/download-task-specification`.
+For Codex, this installs the skill into
+`~/.codex/skills/download-task-specification`.
 The installed script entrypoints delegate to the bundled shared
 `scripts/plan_execution/` runtime.
 

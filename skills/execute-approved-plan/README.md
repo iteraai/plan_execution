@@ -4,9 +4,11 @@ Engineer-facing public Codex skill to begin the next dependency-ready planned pu
 
 ## Install
 
-Run `python3 install.py` from the repository root.
+Run `python3 install.py` from the repository root to choose an install target,
+or pass a target flag such as `--codex`.
 
-This installs the skill into `~/.codex/skills/execute-approved-plan`.
+For Codex, this installs the skill into
+`~/.codex/skills/execute-approved-plan`.
 The installed script entrypoints delegate to the bundled shared
 `scripts/plan_execution/` runtime.
 

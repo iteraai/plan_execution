@@ -11,9 +11,11 @@ It logs the user into Itera with `App: ITERAZ`, persists a refreshable local ses
 
 ## Install
 
-Run `python3 install.py` from the repository root.
+Run `python3 install.py` from the repository root to choose an install target,
+or pass a target flag such as `--codex`.
 
-The installer copies this skill into `~/.codex/skills/execute-approved-plan`.
+For Codex, the installer copies this skill into
+`~/.codex/skills/execute-approved-plan`.
 
 ## Input Contract
 

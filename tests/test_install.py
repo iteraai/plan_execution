@@ -3,8 +3,26 @@ from __future__ import annotations
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 import install
+
+
+class InstallTargetSelectionTests(unittest.TestCase):
+    def test_selected_install_targets_returns_all_supported_targets(self) -> None:
+        selected_targets = install.selected_install_targets("all")
+
+        self.assertEqual(
+            [target.name for target in selected_targets],
+            ["codex", "claude", "copilot", "cursor"],
+        )
+
+    def test_selected_install_targets_requires_explicit_noninteractive_target(
+        self,
+    ) -> None:
+        with mock.patch("sys.stdin.isatty", return_value=False):
+            with self.assertRaisesRegex(ValueError, "No install target selected"):
+                install.selected_install_targets(None)
 
 
 class InstallSkillTests(unittest.TestCase):

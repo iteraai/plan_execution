@@ -15,9 +15,11 @@ artifact that agents can import while implementing.
 
 ## Install
 
-Run `python3 install.py` from the repository root.
+Run `python3 install.py` from the repository root to choose an install target,
+or pass a target flag such as `--codex`.
 
-The installer copies this skill into `~/.codex/skills/download-task-specification`.
+For Codex, the installer copies this skill into
+`~/.codex/skills/download-task-specification`.
 
 ## Input Contract
 

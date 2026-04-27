@@ -15,16 +15,20 @@ to the shared runtime package instead of duplicating auth and API logic.
 
 ## Install
 
-Run `python3 install.py` to install the bundled skills for Codex.
+Run `python3 install.py` to choose an install target interactively.
 
-Run `python3 install.py --target claude` to install the same bundled skills for
-Claude Code.
+Run `python3 install.py --codex` to install the bundled skills for Codex.
 
-Run `python3 install.py --target copilot` to install the same bundled skills as
-GitHub Copilot project agent skills.
+Run `python3 install.py --claude` to install the same bundled skills for Claude
+Code.
 
-Run `python3 install.py --target cursor` to install the same bundled runtime
-assets as Cursor project rules.
+Run `python3 install.py --copilot` to install the same bundled skills as GitHub
+Copilot project agent skills.
+
+Run `python3 install.py --cursor` to install the same bundled runtime assets as
+Cursor project rules.
+
+Run `python3 install.py --all` to install every supported target.
 
 For project-scoped targets such as Copilot and Cursor, run the installer from
 the client repository root or pass `--destination-root` explicitly.
@@ -52,14 +56,14 @@ open-standard skill directory instead, pass an explicit destination root such as
 
 Example from a client repository root:
 
-`python3 /path/to/plan_execution/install.py --target copilot`
+`python3 /path/to/plan_execution/install.py --copilot`
 
 Cursor installs are generated as Agent Requested project rules so Cursor can
 decide when to include them. Each generated `.mdc` rule references a colocated
 asset bundle containing the original scripts and contracts. When installing from
 outside the target project root, prefer an explicit destination such as:
 
-`python3 /path/to/plan_execution/install.py --target cursor --destination-root /path/to/project/.cursor/rules`
+`python3 /path/to/plan_execution/install.py --cursor --destination-root /path/to/project/.cursor/rules`
 
 Runtime artifact storage still defaults to `~/.codex/...` for backward
 compatibility. Runtime auth is target-aware:
