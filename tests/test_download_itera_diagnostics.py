@@ -154,6 +154,9 @@ class DownloadIteraDiagnosticsTests(unittest.TestCase):
             if "getOrganization" in query:
                 self.assertEqual(variables, {"organizationId": "acme"})
                 return {"getOrganization": _organization()}
+            if "getProjects" in query:
+                self.assertEqual(variables, {"organizationId": "acme"})
+                return {"getProjects": [_project("project-1", "Runtime")]}
             if "getIterationTaskByCanonicalId" in query:
                 self.assertEqual(variables, {"canonicalId": "ITERA-42"})
                 return {"getIterationTaskByCanonicalId": _task()}
@@ -186,6 +189,127 @@ class DownloadIteraDiagnosticsTests(unittest.TestCase):
             self.assertEqual(len(result["failureReview"]["entries"]), 1)
             self.assertEqual(len(result["failureReview"]["matchingEntries"]), 1)
             self.assertEqual(result["task"]["canonicalId"], "ITERA-42")
+
+    @mock.patch("download_itera_diagnostics.ensure_authenticated_context")
+    @mock.patch("download_itera_diagnostics.graphql_client.execute_graphql")
+    def test_run_download_rejects_project_outside_organization_scope(
+        self,
+        execute_graphql: mock.Mock,
+        ensure_authenticated_context: mock.Mock,
+    ) -> None:
+        ensure_authenticated_context.return_value = _session()
+
+        def graphql_side_effect(
+            query: str,
+            variables: dict[str, object] | None = None,
+            *,
+            token: str | None = None,
+            config: object | None = None,
+        ) -> dict[str, object]:
+            del token, config
+            if "getOrganization" in query:
+                return {"getOrganization": _organization()}
+            if "getProjects" in query:
+                self.assertEqual(variables, {"organizationId": "acme"})
+                return {"getProjects": [_project("project-1", "Runtime")]}
+            self.fail(f"Unexpected GraphQL query: {query}")
+
+        execute_graphql.side_effect = graphql_side_effect
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = download_itera_diagnostics.run_download(
+                "acme",
+                project_id="other-project",
+                include_retained_logs=False,
+                output_file=Path(temp_dir) / "diagnostics.json",
+            )
+
+            self.assertEqual(result["status"], "NOT_FOUND")
+            self.assertIsNone(result["failureReview"])
+            self.assertIn("projectId", result["message"])
+
+    @mock.patch("download_itera_diagnostics.ensure_authenticated_context")
+    @mock.patch("download_itera_diagnostics.graphql_client.execute_graphql")
+    def test_run_download_rejects_task_outside_project_scope(
+        self,
+        execute_graphql: mock.Mock,
+        ensure_authenticated_context: mock.Mock,
+    ) -> None:
+        ensure_authenticated_context.return_value = _session()
+        mismatched_task = {**_task(), "projectId": "project-2"}
+
+        def graphql_side_effect(
+            query: str,
+            variables: dict[str, object] | None = None,
+            *,
+            token: str | None = None,
+            config: object | None = None,
+        ) -> dict[str, object]:
+            del token, config
+            if "getOrganization" in query:
+                return {"getOrganization": _organization()}
+            if "getProjects" in query:
+                return {"getProjects": [_project("project-1", "Runtime")]}
+            if "getIterationTaskByCanonicalId" in query:
+                self.assertEqual(variables, {"canonicalId": "ITERA-42"})
+                return {"getIterationTaskByCanonicalId": mismatched_task}
+            self.fail(f"Unexpected GraphQL query: {query}")
+
+        execute_graphql.side_effect = graphql_side_effect
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = download_itera_diagnostics.run_download(
+                "acme",
+                project_id="project-1",
+                canonical_task_id="ITERA-42",
+                include_retained_logs=False,
+                output_file=Path(temp_dir) / "diagnostics.json",
+            )
+
+            self.assertEqual(result["status"], "NOT_FOUND")
+            self.assertIsNone(result["failureReview"])
+            self.assertIn("canonicalTaskId", result["message"])
+
+    @mock.patch("download_itera_diagnostics.ensure_authenticated_context")
+    @mock.patch("download_itera_diagnostics.graphql_client.execute_graphql")
+    def test_run_download_rejects_task_outside_organization_scope(
+        self,
+        execute_graphql: mock.Mock,
+        ensure_authenticated_context: mock.Mock,
+    ) -> None:
+        ensure_authenticated_context.return_value = _session()
+        mismatched_task = {**_task(), "projectId": "other-project"}
+
+        def graphql_side_effect(
+            query: str,
+            variables: dict[str, object] | None = None,
+            *,
+            token: str | None = None,
+            config: object | None = None,
+        ) -> dict[str, object]:
+            del token, config
+            if "getOrganization" in query:
+                return {"getOrganization": _organization()}
+            if "getProjects" in query:
+                return {"getProjects": [_project("project-1", "Runtime")]}
+            if "getIterationTaskByCanonicalId" in query:
+                self.assertEqual(variables, {"canonicalId": "ITERA-42"})
+                return {"getIterationTaskByCanonicalId": mismatched_task}
+            self.fail(f"Unexpected GraphQL query: {query}")
+
+        execute_graphql.side_effect = graphql_side_effect
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = download_itera_diagnostics.run_download(
+                "acme",
+                canonical_task_id="ITERA-42",
+                include_retained_logs=False,
+                output_file=Path(temp_dir) / "diagnostics.json",
+            )
+
+            self.assertEqual(result["status"], "NOT_FOUND")
+            self.assertIsNone(result["failureReview"])
+            self.assertIn("canonicalTaskId", result["message"])
 
     @mock.patch("download_itera_diagnostics.ensure_authenticated_context")
     @mock.patch("download_itera_diagnostics.graphql_client.execute_graphql")
@@ -309,6 +433,8 @@ class DownloadIteraDiagnosticsTests(unittest.TestCase):
             del token, config
             if "getOrganization" in query:
                 return {"getOrganization": _organization()}
+            if "getProjects" in query:
+                return {"getProjects": [_project("project-1", "Runtime")]}
             if "getProjectFailureReviewEntries" in query:
                 return {"getProjectFailureReviewEntries": [_failure_entry()]}
             if "generateDownloadInformation" in query:

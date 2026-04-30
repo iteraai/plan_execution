@@ -644,9 +644,37 @@ def _fetch_iteration_task_by_canonical_id(
     ).get("getIterationTaskByCanonicalId")
 
 
+def _find_project(
+    projects: list[dict[str, Any]],
+    project_id: str,
+) -> dict[str, Any] | None:
+    for project in projects:
+        if str(project.get("id") or "") == project_id:
+            return project
+    return None
+
+
+def _project_ids(projects: list[dict[str, Any]]) -> set[str]:
+    return {str(project.get("id")) for project in projects if project.get("id")}
+
+
+def _task_is_in_requested_scope(
+    task: dict[str, Any],
+    *,
+    project_id: str | None,
+    projects: list[dict[str, Any]],
+) -> bool:
+    task_project_id = str(task.get("projectId") or "")
+    if not task_project_id:
+        return False
+    if project_id:
+        return task_project_id == project_id
+    return task_project_id in _project_ids(projects)
+
+
 def _fetch_failure_review_sets(
     *,
-    organization_id: str,
+    projects: list[dict[str, Any]],
     project_id: str | None,
     page: int,
     page_size: int,
@@ -654,6 +682,7 @@ def _fetch_failure_review_sets(
     config: graphql_client.GraphQLRequestConfig,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if project_id is not None:
+        project = _find_project(projects, project_id)
         entries = _fetch_project_failure_review_entries(
             project_id,
             page=page,
@@ -661,9 +690,10 @@ def _fetch_failure_review_sets(
             token=token,
             config=config,
         )
-        return [], [{"projectId": project_id, "project": None, "entries": entries}]
+        return projects, [
+            {"projectId": project_id, "project": project, "entries": entries}
+        ]
 
-    projects = _fetch_projects(organization_id, token=token, config=config)
     failure_review_sets: list[dict[str, Any]] = []
     for project in projects:
         fetched_project_id = project.get("id")
@@ -1004,6 +1034,25 @@ def run_download(
                 social_me=social_me,
             )
 
+        projects = _fetch_projects(
+            organization_id,
+            token=session_payload["token"],
+            config=request_config,
+        )
+        if project_id and _find_project(projects, project_id) is None:
+            return _error_result(
+                status="NOT_FOUND",
+                message=(
+                    "No project matched projectId in the requested organization scope"
+                ),
+                organization_id=organization_id,
+                project_id=project_id,
+                canonical_task_id=canonical_task_id,
+                failure_review_entry_id=failure_review_entry_id,
+                viewer=viewer,
+                social_me=social_me,
+            )
+
         task = None
         if canonical_task_id:
             task = _fetch_iteration_task_by_canonical_id(
@@ -1022,9 +1071,27 @@ def run_download(
                     viewer=viewer,
                     social_me=social_me,
                 )
+            if not _task_is_in_requested_scope(
+                task,
+                project_id=project_id,
+                projects=projects,
+            ):
+                return _error_result(
+                    status="NOT_FOUND",
+                    message=(
+                        "No iteration task matched canonicalTaskId in the requested "
+                        "project or organization scope"
+                    ),
+                    organization_id=organization_id,
+                    project_id=project_id,
+                    canonical_task_id=canonical_task_id,
+                    failure_review_entry_id=failure_review_entry_id,
+                    viewer=viewer,
+                    social_me=social_me,
+                )
 
         projects, failure_review_sets = _fetch_failure_review_sets(
-            organization_id=organization_id,
+            projects=projects,
             project_id=project_id,
             page=normalized_page,
             page_size=normalized_page_size,
