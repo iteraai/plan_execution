@@ -7,7 +7,7 @@ Python bridge that powers them.
 
 - `plan_execution/`: shared Python runtime for Itera auth, GraphQL requests,
   artifact writing, prototype media downloads, task snapshots, planned PR
-  snapshots, and planned PR claiming
+  snapshots, diagnostics snapshots, and planned PR claiming
 - `skills/`: thin skill wrappers and supporting documentation
 
 The public skill script paths remain stable, but their implementations delegate
@@ -80,6 +80,7 @@ compatibility. Runtime auth is target-aware:
 
 - [`execute-approved-plan`](skills/execute-approved-plan/): start execution for the next dependency-ready planned pull request using a canonical task ID.
 - [`execute-planned-pr`](skills/execute-planned-pr/): start execution for one exact dependency-ready planned pull request using canonical task ID and planned pull request ID.
+- [`download-itera-diagnostics`](skills/download-itera-diagnostics/): download read-only Itera organization/project diagnostics for admins.
 - [`download-task-specification`](skills/download-task-specification/): download the full task specification and coding context for a canonical task ID.
 - [`download-pr-specification`](skills/download-pr-specification/): download the full build specification for a planned pull request within a canonical task.
 
@@ -116,6 +117,16 @@ compatibility. Runtime auth is target-aware:
 - raw task payload plus derived build context for coding
 - default JSON artifact at `~/.codex/artifacts/plan_execution/specifications/tasks/<canonical-task-id-lower>.json`
 
+### `download-itera-diagnostics`
+
+- `organizationId` input, with optional `projectId`, `canonicalTaskId`, and `failureReviewEntryId`
+- self-bootstrapped Itera login using `App: ITERAZ` and `Platform: WEB`
+- stored refreshable session at the target-specific auth path
+- read-only `getOrganization`, `getProjects`, `getProjectFailureReviewEntries`, and optional `getIterationTaskByCanonicalId` queries
+- local `itera.yaml` capture with obvious token-like values redacted
+- optional retained log artifact downloads resolved through `generateDownloadInformation(media)`
+- default JSON artifact at `~/.codex/artifacts/plan_execution/diagnostics/<organization-id>/diagnostics.json`
+
 ### `download-pr-specification`
 
 - `canonicalTaskId` plus `pullRequestPosition` or `plannedPullRequestId`
@@ -132,6 +143,7 @@ compatibility. Runtime auth is target-aware:
 - `plan_execution/artifacts.py`
 - `plan_execution/tasks.py`
 - `plan_execution/planned_prs.py`
+- `plan_execution/diagnostics.py`
 - `plan_execution/bridge.py`
 - `plan_execution/execute_planned_pr.py`
 - `plan_execution/cli.py`
