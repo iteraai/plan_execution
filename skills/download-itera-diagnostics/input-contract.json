@@ -1,0 +1,144 @@
+{
+  "name": "download-itera-diagnostics",
+  "description": "Self-contained public skill that downloads read-only Itera organization/project diagnostics for organization or project admins.",
+  "version": "1.0.0",
+  "input": {
+    "type": "object",
+    "required": ["organizationId"],
+    "properties": {
+      "organizationId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Itera organization identifier."
+      },
+      "projectId": {
+        "type": "string",
+        "description": "Optional Itera project ID. If omitted, diagnostics collect one bounded failure review page for each organization project."
+      },
+      "canonicalTaskId": {
+        "type": "string",
+        "pattern": "^[A-Z0-9]+-[1-9][0-9]*$",
+        "description": "Optional canonical Itera task ID (for example FRONTPAGE-42)."
+      },
+      "failureReviewEntryId": {
+        "type": "string",
+        "description": "Optional failure review entry ID to focus diagnostics on."
+      },
+      "page": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 1,
+        "description": "Failure review page to fetch."
+      },
+      "pageSize": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 10,
+        "description": "Failure review page size."
+      },
+      "includeRetainedLogs": {
+        "type": "boolean",
+        "default": true,
+        "description": "Resolve retained log media references and download them beside the diagnostics artifact."
+      },
+      "localRepoPath": {
+        "type": "string",
+        "description": "Optional local repository path to inspect for itera.yaml. Defaults to the current directory."
+      },
+      "outputFile": {
+        "type": "string",
+        "description": "Optional explicit JSON artifact path."
+      }
+    },
+    "additionalProperties": false
+  },
+  "behavior": {
+    "installEntryPoint": "python3 install.py",
+    "sessionFile": "Target-specific default; Codex ~/.codex/auth/plan_execution/iteraz.json, Claude ~/.claude/auth/plan_execution/iteraz.json, Cursor ~/.cursor/auth/plan_execution/iteraz.json, Copilot/other ${XDG_CONFIG_HOME:-~/.config}/plan_execution/auth/iteraz.json",
+    "defaultOutputFile": "~/.codex/artifacts/plan_execution/diagnostics/<organization-id>/diagnostics.json",
+    "appHeader": "ITERAZ",
+    "platformHeader": "WEB",
+    "requiredGraphQLCalls": [
+      "sendEmailVerificationCode(email)",
+      "loginWithEmailMfa(identifier, code)",
+      "completeEmailLoginWithTotp(challengeId, code)",
+      "completeEmailLoginWithRecoveryCode(challengeId, code)",
+      "beginTotpEnrollment",
+      "confirmTotpEnrollment(code)",
+      "refreshToken(refreshToken)",
+      "socialMe",
+      "getOrganization(identifier)",
+      "getProjects(organizationId)",
+      "getProjectFailureReviewEntries(projectId, page, pageSize)",
+      "getIterationTaskByCanonicalId(canonicalId)",
+      "generateDownloadInformation(media)"
+    ],
+    "outputContains": [
+      "viewer and organization context",
+      "project-scoped failure review entries",
+      "optional task context",
+      "redacted local itera.yaml capture",
+      "downloaded retained log artifacts when requested and available",
+      "derived analysis with likely cause, confidence, evidence, recommended next steps, and safety notes"
+    ]
+  },
+  "output": {
+    "type": "object",
+    "required": ["status", "organizationId", "diagnosticsFile"],
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "SUCCESS",
+          "AUTH_REQUIRED",
+          "LOGIN_FAILED",
+          "NOT_FOUND",
+          "FORBIDDEN",
+          "UNAVAILABLE"
+        ]
+      },
+      "organizationId": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": ["string", "null"]
+      },
+      "canonicalTaskId": {
+        "type": ["string", "null"]
+      },
+      "failureReviewEntryId": {
+        "type": ["string", "null"]
+      },
+      "diagnosticsFile": {
+        "type": ["string", "null"]
+      },
+      "organization": {
+        "type": ["object", "null"]
+      },
+      "projects": {
+        "type": ["array", "null"]
+      },
+      "failureReview": {
+        "type": ["object", "null"]
+      },
+      "task": {
+        "type": ["object", "null"]
+      },
+      "localRepository": {
+        "type": ["object", "null"]
+      },
+      "retainedLogDownloads": {
+        "type": ["array", "null"]
+      },
+      "analysis": {
+        "type": ["object", "null"]
+      },
+      "viewer": {
+        "type": ["object", "null"]
+      },
+      "message": {
+        "type": ["string", "null"]
+      }
+    }
+  }
+}

@@ -58,6 +58,10 @@ CLAUDE_SKILL_FRONTMATTER = {
         "disable-model-invocation": True,
         "argument-hint": "[canonical-task-id] [pull-request-position-or-planned-pull-request-id]",
     },
+    "download-itera-diagnostics": {
+        "disable-model-invocation": True,
+        "argument-hint": "[organization-id] [project-id]",
+    },
 }
 
 
