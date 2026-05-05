@@ -84,6 +84,15 @@ compatibility. Runtime auth is target-aware:
 - [`download-task-specification`](skills/download-task-specification/): download the full task specification and coding context for a canonical task ID.
 - [`download-pr-specification`](skills/download-pr-specification/): download the full build specification for a planned pull request within a canonical task.
 
+## Prototype Canvas Guidance
+
+When prototype patches include Itera canvas code, the canvas is reference
+material only. Skills must tell implementing agents to never build a Canvas page
+or `/itera/canvas` route in the target app from a prototype patch. The contents
+of the prototype canvas can be used to understand component states and variants,
+but written specifications and non-canvas prototype app changes remain the
+source of truth for product UI and behavior.
+
 ## Available skill APIs
 
 ### `execute-approved-plan`

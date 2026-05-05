@@ -1,7 +1,7 @@
 {
   "name": "execute-planned-pr",
   "description": "Self-contained public skill that logs into Itera, claims exactly one dependency-ready planned pull request by plannedPullRequestId, and returns implementation context.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "input": {
     "type": "object",
     "required": ["canonicalTaskId", "plannedPullRequestId"],
@@ -51,7 +51,7 @@
       "suggestedBranchName",
       "execution",
       "implementationContext",
-      "prototypeImplementationGuidance",
+      "prototypeImplementationGuidance with strict canvas-as-reference-only rules",
       "artifactPaths",
       "prototypeCodeMediaDownloads"
     ]

@@ -267,6 +267,18 @@ class ExecuteApprovedPlanTests(unittest.TestCase):
             "pixel-perfect",
             result["prototypeImplementationGuidance"]["instructionSummary"],
         )
+        self.assertIn(
+            "Never build a Canvas page",
+            result["prototypeImplementationGuidance"]["instructionSummary"],
+        )
+        self.assertIn(
+            "Use prototype canvas files, fixtures, and manifests only to understand component states and variants.",
+            result["prototypeImplementationGuidance"]["requirements"],
+        )
+        self.assertIn(
+            "Never build a Canvas page",
+            result["prototypeCodeMediaDownloads"][0]["usageSummary"],
+        )
 
     @mock.patch("execute_approved_plan.ensure_authenticated_context")
     @mock.patch("execute_approved_plan.graphql_client.execute_graphql")

@@ -353,18 +353,24 @@ def _build_prototype_patch_instruction_summary(
 
     if is_ui_or_ux_scope:
         return (
-            f"{prefix} This work has UI/UX signals, so treat the prototype as the visual "
-            "source of truth and match it pixel-perfect for layout, spacing, sizing, "
-            "typography, states, responsive behavior, and relevant interactions. Do not "
-            "copy logic, data flow, APIs, or backend behavior from the prototype unless "
-            "the written specifications explicitly require that work."
+            f"{prefix} This work has UI/UX signals, so treat written specs and the "
+            "non-canvas prototype app changes as the visual source of truth and match "
+            "product UI pixel-perfect for layout, spacing, sizing, typography, states, "
+            "responsive behavior, and relevant interactions. Never build a Canvas page "
+            "or `/itera/canvas` route from the prototype; use prototype canvas files only "
+            "to understand component states and variants. Do not copy logic, data flow, "
+            "APIs, or backend behavior from the prototype unless the written "
+            "specifications explicitly require that work."
         )
 
     return (
         f"{prefix} Treat it as required implementation context. If this work includes UI "
-        "or UX scope, use the prototype as the visual source of truth for pixel-perfect "
-        "implementation and do not copy prototype logic, APIs, or backend behavior unless "
-        "the written specifications explicitly require that work."
+        "or UX scope, use written specs and non-canvas prototype app changes as the "
+        "visual source of truth for pixel-perfect implementation. Never build a Canvas "
+        "page or `/itera/canvas` route from the prototype; use prototype canvas files "
+        "only to understand component states and variants. Do not copy prototype logic, "
+        "APIs, or backend behavior unless the written specifications explicitly require "
+        "that work."
     )
 
 
@@ -409,7 +415,10 @@ def _build_prototype_guidance_for_pull_request(
         "requirements": [
             "Do not start implementation until every referenced prototype patch has been downloaded or the download failure has been resolved.",
             "Open the downloaded prototype patch before editing code and keep it visible while implementing the affected slice.",
-            "When the work includes UI or UX scope, copy the prototype pixel-perfect for layout, spacing, sizing, typography, states, responsive behavior, and relevant interactions.",
+            "When the work includes UI or UX scope, match the non-canvas prototype product UI pixel-perfect for layout, spacing, sizing, typography, states, responsive behavior, and relevant interactions.",
+            "Never build a Canvas page or `/itera/canvas` route in the target app from a prototype patch; prototype canvas code is not part of the production deliverable.",
+            "Use prototype canvas files, fixtures, and manifests only to understand component states and variants.",
+            "Treat written specifications and non-canvas prototype app changes as the source of truth; do not let canvas-only fixtures, mocks, routes, manifests, or helpers define product behavior or scope.",
             "Use the prototype only for UI/UX guidance unless the written specs explicitly say otherwise; do not inherit its business logic, data flow, API contracts, or backend behavior.",
         ],
     }
@@ -666,8 +675,11 @@ def _download_prototype_code_media_artifacts(
                 "mustReviewBeforeImplementation": True,
                 "usageSummary": (
                     "Mandatory: inspect this prototype patch before implementation. If the "
-                    "associated work includes UI or UX scope, use it as the pixel-perfect "
-                    "visual reference and do not copy logic or backend behavior from it."
+                    "associated work includes UI or UX scope, use written specs and "
+                    "non-canvas prototype app changes as the pixel-perfect visual "
+                    "reference. Never build a Canvas page or `/itera/canvas` route from "
+                    "the prototype; canvas files are only a reference for component "
+                    "states and variants. Do not copy logic or backend behavior from it."
                 ),
                 "sourceLocations": collected_entry["sourceLocations"],
             }

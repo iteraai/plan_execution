@@ -42,7 +42,10 @@ See `input-contract.json`.
 ## Prototype Guardrails
 
 - Downloaded prototype patches are required implementation input, not optional context.
-- If the selected PR includes UI or UX work, the prototype must drive a pixel-perfect implementation of visuals and relevant interactions.
+- If the selected PR includes UI or UX work, written specs and non-canvas prototype app changes must drive a pixel-perfect implementation of visuals and relevant interactions.
+- Never build a Canvas page or `/itera/canvas` route in the target app from a prototype patch.
+- Use prototype canvas files, fixtures, manifests, and `/itera/canvas` contents only to understand component states and variants.
+- Treat everything outside the prototype canvas as the primary source of truth for product UI and behavior.
 - Do not copy product logic, API contracts, data flow, or backend behavior from the prototype unless the written specifications separately require that work.
 
 ## Runtime Constraints
