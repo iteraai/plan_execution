@@ -44,9 +44,11 @@ The installed script entrypoints delegate to the bundled shared
 9. When a prototype patch is attached, emit explicit prototype implementation
    guidance that makes patch review mandatory before coding. If the selected PR
    includes UI or UX scope, the guidance must require a pixel-perfect UI
-   implementation from the prototype while excluding prototype logic, API
-   behavior, and backend behavior unless the written specs separately require
-   them.
+   implementation from written specs and non-canvas prototype app changes,
+   explicitly say to never build a Canvas page or `/itera/canvas` route from the
+   prototype, allow prototype canvas files only as component state/variant
+   references, and exclude prototype logic, API behavior, and backend behavior
+   unless the written specs separately require them.
 10. Write the full snapshot to a local JSON artifact so downstream agents can
    import it directly.
 11. Return the same snapshot as structured JSON on stdout.

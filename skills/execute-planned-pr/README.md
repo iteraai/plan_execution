@@ -20,4 +20,4 @@ The command refreshes or bootstraps Itera auth, fetches the task's current plan 
 
 It does not select the next ready planned PR. Use `execute-approved-plan` for that workflow.
 
-Prototype patches referenced by the selected PR are downloaded and returned as mandatory implementation inputs. For UI/UX PRs, treat the prototype as the visual source of truth and do not copy prototype logic/API/backend behavior unless the specs separately require it.
+Prototype patches referenced by the selected PR are downloaded and returned as mandatory implementation inputs. For UI/UX PRs, treat written specs and non-canvas prototype app changes as the visual source of truth. Never build a Canvas page or `/itera/canvas` route from the prototype; use prototype canvas files only to understand component states and variants. Do not copy prototype logic/API/backend behavior unless the specs separately require it.

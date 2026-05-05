@@ -37,13 +37,16 @@ See `input-contract.json`.
 8. Build the branch name as `itera/<canonical-task-id-lower>/pr-<position+1>`.
 9. Claim the PR with `claimPlannedPullRequestExecution(plannedPullRequestId, branchName)`.
 10. Resolve any referenced `prototypeCodeMedia` artifacts through `generateDownloadInformation(media)`, download them to `~/.codex/artifacts/plan_execution/claims/<canonical-task-id-lower>/pr-<position>/prototype_code_media/`, and annotate the returned implementation context with the local file paths.
-11. When a prototype patch is attached, return explicit `prototypeImplementationGuidance` that makes patch review mandatory before coding. If the PR includes UI or UX scope, the guidance must say to treat the prototype as the visual source of truth and match it pixel-perfect for UI details and relevant UX, while explicitly excluding prototype logic, APIs, and backend behavior unless separately specified.
+11. When a prototype patch is attached, return explicit `prototypeImplementationGuidance` that makes patch review mandatory before coding. If the PR includes UI or UX scope, the guidance must say to treat written specs and non-canvas prototype app changes as the visual source of truth and match product UI pixel-perfect for UI details and relevant UX. It must also say to never build a Canvas page or `/itera/canvas` route from the prototype, to use prototype canvas files only as state/variant reference material, and to exclude prototype logic, APIs, and backend behavior unless separately specified.
 12. Return the claimed execution details, suggested branch name, `implementationContext`, explicit prototype guidance, and prototype code media download metadata as JSON.
 
 ## Prototype guardrails
 
 - Downloaded prototype patches are required implementation input, not optional context.
-- If the selected PR includes UI or UX work, the prototype must drive a pixel-perfect implementation of visuals and relevant interactions.
+- If the selected PR includes UI or UX work, written specs and non-canvas prototype app changes must drive a pixel-perfect implementation of visuals and relevant interactions.
+- Never build a Canvas page or `/itera/canvas` route in the target app from a prototype patch.
+- Use prototype canvas files, fixtures, manifests, and `/itera/canvas` contents only to understand component states and variants.
+- Treat everything outside the prototype canvas as the primary source of truth for product UI and behavior.
 - Do not copy product logic, API contracts, data flow, or backend behavior from the prototype unless the written specifications separately require that work.
 
 ## Runtime constraints

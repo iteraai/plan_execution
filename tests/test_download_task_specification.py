@@ -296,6 +296,22 @@ class DownloadTaskSpecificationTests(unittest.TestCase):
                     "instructionSummary"
                 ],
             )
+            self.assertIn(
+                "Never build a Canvas page",
+                result["prototypeImplementationGuidance"]["plannedPullRequests"][0][
+                    "instructionSummary"
+                ],
+            )
+            self.assertIn(
+                "Use prototype canvas files, fixtures, and manifests only to understand component states and variants.",
+                result["prototypeImplementationGuidance"]["plannedPullRequests"][0][
+                    "requirements"
+                ],
+            )
+            self.assertIn(
+                "Never build a Canvas page",
+                result["prototypeCodeMediaDownloads"][0]["usageSummary"],
+            )
 
     @mock.patch("download_task_specification.ensure_authenticated_context")
     @mock.patch("download_task_specification.graphql_client.execute_graphql")

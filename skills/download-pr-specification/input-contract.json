@@ -1,7 +1,7 @@
 {
   "name": "download-pr-specification",
   "description": "Self-contained public skill that downloads the full build specification for a planned pull request within a canonical task.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "input": {
     "type": "object",
     "required": ["canonicalTaskId"],
@@ -60,7 +60,7 @@
       "dependency context",
       "repository hints",
       "downloaded prototype code media artifacts when present",
-      "explicit prototype UI implementation guidance when prototype patches are attached"
+      "explicit prototype UI implementation guidance when prototype patches are attached, including a strict instruction to never build prototype canvas routes/pages and to use canvas contents only as state references"
     ]
   },
   "output": {
