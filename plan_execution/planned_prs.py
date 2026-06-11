@@ -215,9 +215,10 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
       questionIds
       specificationIds
     }
-    jiraWorkItemLink {
-      workItemKey
-      summary
+    ticketLink {
+      provider
+      ticketKey
+      title
       statusName
       browseUrl
     }
@@ -1219,6 +1220,7 @@ def run_download(
                 "outOfScope": task.get("outOfScope"),
                 "contextProblem": task.get("contextProblem"),
                 "ownerUsername": (task.get("owner") or {}).get("username"),
+                "ticketLink": task.get("ticketLink"),
             },
             "selectedPlannedPullRequest": selected_pull_request,
             "sourceTaskSpecifications": source_task_specifications,

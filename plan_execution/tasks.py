@@ -215,9 +215,10 @@ query GetIterationTaskByCanonicalId($canonicalId: IterationTaskCanonicalID!) {
       questionIds
       specificationIds
     }
-    jiraWorkItemLink {
-      workItemKey
-      summary
+    ticketLink {
+      provider
+      ticketKey
+      title
       statusName
       browseUrl
     }
@@ -675,7 +676,7 @@ def _build_build_context(task: dict[str, Any]) -> dict[str, Any]:
             "outOfScope": task.get("outOfScope"),
             "contextProblem": task.get("contextProblem"),
             "ownerUsername": (task.get("owner") or {}).get("username"),
-            "jiraWorkItemLink": task.get("jiraWorkItemLink"),
+            "ticketLink": task.get("ticketLink"),
         },
         "repositoryHints": _build_repository_hints(task, enriched_pull_requests),
         "questionSummary": {
