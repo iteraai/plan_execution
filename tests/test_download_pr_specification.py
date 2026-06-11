@@ -134,7 +134,13 @@ def _build_task_payload() -> dict[str, object]:
             }
         ],
         "currentHumanBlocker": None,
-        "jiraWorkItemLink": None,
+        "ticketLink": {
+            "provider": "JIRA",
+            "ticketKey": "FRONT-42",
+            "title": "Download PR context",
+            "statusName": "Ready",
+            "browseUrl": "https://tickets.example.com/browse/FRONT-42",
+        },
         "linkedPrototypeIteration": None,
         "currentPlan": {
             "id": "plan-1",
@@ -233,6 +239,14 @@ class DownloadPrSpecificationTests(unittest.TestCase):
         download_pr_specification.auth_refresh._warned_about_windows_permission_fallback = (
             False
         )
+
+    def test_task_query_uses_generic_ticket_link(self) -> None:
+        query = download_pr_specification.GET_ITERATION_TASK_BY_CANONICAL_ID_QUERY
+
+        self.assertIn("ticketLink", query)
+        self.assertIn("ticketKey", query)
+        self.assertNotIn("jiraWorkItemLink", query)
+        self.assertNotIn("workItemKey", query)
 
     @mock.patch("download_pr_specification.ensure_authenticated_context")
     @mock.patch("download_pr_specification.graphql_client.execute_graphql")
@@ -385,6 +399,10 @@ class DownloadPrSpecificationTests(unittest.TestCase):
             self.assertEqual(
                 result["buildContext"]["dependencyContext"]["dependsOn"][0]["id"],
                 "pr-1",
+            )
+            self.assertEqual(
+                result["buildContext"]["taskSummary"]["ticketLink"]["ticketKey"],
+                "FRONT-42",
             )
             self.assertEqual(result["snapshotFile"], str(output_file))
             self.assertTrue(output_file.exists())
