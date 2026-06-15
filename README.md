@@ -76,6 +76,16 @@ compatibility. Runtime auth is target-aware:
 `--session-file`, `PLAN_EXECUTION_SESSION_FILE`, and
 `PLAN_EXECUTION_AUTH_ROOT` can override the default.
 
+Interactive login opens a short-lived local browser UI by default. The runtime
+binds to `127.0.0.1` on a random port, prints a one-time login URL, lets the
+user enter email verification and TOTP/recovery codes in the browser, then
+writes the same refreshable session file. The agent process sees only login
+status and user metadata in command output, not OTP, TOTP, access token, or
+refresh token values.
+Set `PLAN_EXECUTION_LOGIN_MODE=terminal` to use the legacy terminal prompt flow,
+or `PLAN_EXECUTION_WEB_LOGIN_TIMEOUT_SECONDS` to change the browser-login wait
+timeout.
+
 ## Available skills
 
 - [`execute-approved-plan`](skills/execute-approved-plan/): start execution for the next dependency-ready planned pull request using a canonical task ID.
@@ -148,6 +158,7 @@ source of truth for product UI and behavior.
 ## Bundled runtime scripts
 
 - `plan_execution/auth.py`
+- `plan_execution/auth_web.py`
 - `plan_execution/graphql_client.py`
 - `plan_execution/artifacts.py`
 - `plan_execution/tasks.py`
@@ -163,8 +174,8 @@ these modules.
 ## Plan execution flow at a glance
 
 1. Refresh the stored session if the target-specific auth file exists.
-2. If no valid session exists, bootstrap login with `sendEmailVerificationCode(email)` and `loginWithEmailMfa(identifier, code)`.
-3. Complete MFA with TOTP, recovery code, or restricted-session enrollment when required.
+2. If no valid session exists, bootstrap login through the local browser UI using `sendEmailVerificationCode(email)` and `loginWithEmailMfa(identifier, code)`.
+3. Complete MFA in that UI with TOTP, recovery code, or restricted-session enrollment when required.
 4. Validate the authenticated session with `socialMe`.
 5. Resolve the next dependency-ready planned pull request using `getNextReadyPlannedPullRequestForTask(canonicalTaskId)`, or use `execute-planned-pr` to resolve one exact planned PR by `plannedPullRequestId`.
 6. If unavailable, return the explicit reason without claiming anything.

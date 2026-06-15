@@ -25,11 +25,12 @@ See `input-contract.json`.
 
 1. Run `python3 ~/.codex/skills/execute-planned-pr/scripts/execute_planned_pr.py --canonical-task-id <CANONICAL_TASK_ID> --planned-pull-request-id <PLANNED_PR_ID>`.
 2. If the target-specific session file exists, refresh it with `refreshToken(refreshToken)`.
-3. If no valid session exists, bootstrap login with:
+3. If no valid session exists, bootstrap login through a short-lived local browser UI on `127.0.0.1`; the user enters email verification, TOTP, recovery, or enrollment codes there, and the runtime stores the normal local session. The same GraphQL operations are used:
    - `sendEmailVerificationCode(email)`
    - `loginWithEmailMfa(identifier, code)`
    - `completeEmailLoginWithTotp(challengeId, code)` or `completeEmailLoginWithRecoveryCode(challengeId, code)` when needed
    - `beginTotpEnrollment` and `confirmTotpEnrollment(code)` when the server requires first-time TOTP setup
+   Use `PLAN_EXECUTION_LOGIN_MODE=terminal` only when the legacy prompt flow is explicitly preferred.
 4. Validate the authenticated session with `socialMe`.
 5. Fetch task and plan context with `getIterationTaskByCanonicalId(canonicalId)`.
 6. Locate the current plan entry whose `id` equals `plannedPullRequestId`.
@@ -71,6 +72,7 @@ See `input-contract.json`.
 
 - `scripts/execute_planned_pr.py`
 - `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/auth_web.py`
 - `scripts/plan_execution/graphql_client.py`
 - `scripts/plan_execution/artifacts.py`
 - `scripts/plan_execution/bridge.py`

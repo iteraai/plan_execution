@@ -179,6 +179,37 @@ class AuthLoginTests(unittest.TestCase):
         self.assertEqual(value, "123456")
         getpass_mock.assert_called_once_with("Email verification code: ")
 
+    @mock.patch("auth_login.login_with_local_web_ui")
+    def test_bootstrap_login_defaults_to_web_ui(
+        self,
+        login_with_local_web_ui: mock.Mock,
+    ) -> None:
+        login_with_local_web_ui.return_value = {"token": "access-token"}
+
+        session = auth_login.bootstrap_login(
+            session_file=Path("/tmp/iteraz.json"),
+            config=graphql_client.GraphQLRequestConfig(),
+        )
+
+        self.assertEqual(session["token"], "access-token")
+        login_with_local_web_ui.assert_called_once()
+
+    @mock.patch("auth_login.login_interactively")
+    def test_bootstrap_login_supports_terminal_mode(
+        self,
+        login_interactively: mock.Mock,
+    ) -> None:
+        login_interactively.return_value = {"token": "access-token"}
+
+        session = auth_login.bootstrap_login(
+            session_file=Path("/tmp/iteraz.json"),
+            config=graphql_client.GraphQLRequestConfig(),
+            login_mode="terminal",
+        )
+
+        self.assertEqual(session["token"], "access-token")
+        login_interactively.assert_called_once()
+
     def test_auth_login_script_copies_stay_in_sync(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         canonical = (

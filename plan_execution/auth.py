@@ -22,6 +22,10 @@ import graphql_client
 SESSION_FILENAME = "iteraz.json"
 SESSION_ENV_VAR = "PLAN_EXECUTION_SESSION_FILE"
 AUTH_ROOT_ENV_VAR = "PLAN_EXECUTION_AUTH_ROOT"
+LOGIN_MODE_ENV_VAR = "PLAN_EXECUTION_LOGIN_MODE"
+WEB_LOGIN_TIMEOUT_ENV_VAR = "PLAN_EXECUTION_WEB_LOGIN_TIMEOUT_SECONDS"
+DEFAULT_LOGIN_MODE = "web"
+DEFAULT_WEB_LOGIN_TIMEOUT_SECONDS = 600
 LEGACY_CODEX_SESSION_FILE = (
     Path.home() / ".codex" / "auth" / "plan_execution" / SESSION_FILENAME
 )
@@ -114,6 +118,25 @@ def expand_session_file(path: str | Path | None = None) -> Path:
     if path is None:
         return DEFAULT_SESSION_FILE
     return Path(path).expanduser()
+
+
+def default_login_mode() -> str:
+    return os.environ.get(LOGIN_MODE_ENV_VAR, DEFAULT_LOGIN_MODE).strip().lower()
+
+
+def default_web_login_timeout_seconds() -> int:
+    raw_value = os.environ.get(WEB_LOGIN_TIMEOUT_ENV_VAR)
+    if not raw_value:
+        return DEFAULT_WEB_LOGIN_TIMEOUT_SECONDS
+    try:
+        timeout_seconds = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{WEB_LOGIN_TIMEOUT_ENV_VAR} must be an integer number of seconds"
+        ) from exc
+    if timeout_seconds <= 0:
+        raise ValueError(f"{WEB_LOGIN_TIMEOUT_ENV_VAR} must be greater than 0")
+    return timeout_seconds
 
 
 def load_session(session_file: Path = DEFAULT_SESSION_FILE) -> dict[str, Any]:
@@ -284,12 +307,6 @@ def refresh_main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as exc:  # pragma: no cover - CLI failure path
-        print(f"refresh failed: {exc}", file=sys.stderr)
-        raise SystemExit(1)
 SEND_EMAIL_VERIFICATION_CODE_MUTATION = """
 mutation SendEmailVerificationCode($email: String!) {
   sendEmailVerificationCode(email: $email) {
@@ -541,6 +558,74 @@ def _complete_totp_enrollment(
     )
 
 
+def login_with_local_web_ui(
+    *,
+    session_file: Path = DEFAULT_SESSION_FILE,
+    config: graphql_client.GraphQLRequestConfig | None = None,
+    email: str | None = None,
+    timeout_seconds: int | None = None,
+) -> dict[str, Any]:
+    from . import auth_web
+
+    return auth_web.login_with_local_web_ui(
+        session_file=session_file,
+        config=config or graphql_client.GraphQLRequestConfig(),
+        email=email,
+        timeout_seconds=timeout_seconds or default_web_login_timeout_seconds(),
+    )
+
+
+def bootstrap_login(
+    *,
+    session_file: Path = DEFAULT_SESSION_FILE,
+    config: graphql_client.GraphQLRequestConfig | None = None,
+    email: str | None = None,
+    login_mode: str | None = None,
+    web_timeout_seconds: int | None = None,
+) -> dict[str, Any]:
+    request_config = config or graphql_client.GraphQLRequestConfig()
+    normalized_mode = (login_mode or default_login_mode()).strip().lower()
+
+    if normalized_mode == "terminal":
+        return login_interactively(
+            session_file=session_file,
+            config=request_config,
+            email=email,
+        )
+
+    if normalized_mode == "web":
+        return login_with_local_web_ui(
+            session_file=session_file,
+            config=request_config,
+            email=email,
+            timeout_seconds=web_timeout_seconds,
+        )
+
+    if normalized_mode == "auto":
+        try:
+            return login_with_local_web_ui(
+                session_file=session_file,
+                config=request_config,
+                email=email,
+                timeout_seconds=web_timeout_seconds,
+            )
+        except Exception as exc:
+            print(
+                f"Local web login failed, falling back to terminal login: {exc}",
+                file=sys.stderr,
+            )
+            return login_interactively(
+                session_file=session_file,
+                config=request_config,
+                email=email,
+            )
+
+    raise ValueError(
+        f"Unsupported login mode: {normalized_mode}. "
+        "Expected web, terminal, or auto."
+    )
+
+
 def login_interactively(
     *,
     session_file: Path = DEFAULT_SESSION_FILE,
@@ -600,6 +685,24 @@ def login_main() -> int:
     )
     parser.add_argument("--email", help="Prefill the Itera email address for login.")
     parser.add_argument(
+        "--login-mode",
+        choices=("web", "terminal", "auto"),
+        default=None,
+        help=(
+            "Login UI mode. Defaults to PLAN_EXECUTION_LOGIN_MODE or web. "
+            "Use terminal for the legacy prompt flow."
+        ),
+    )
+    parser.add_argument(
+        "--web-timeout-seconds",
+        type=int,
+        default=None,
+        help=(
+            "Seconds to wait for browser login. Defaults to "
+            f"{WEB_LOGIN_TIMEOUT_ENV_VAR} or {DEFAULT_WEB_LOGIN_TIMEOUT_SECONDS}."
+        ),
+    )
+    parser.add_argument(
         "--session-file",
         default=str(DEFAULT_SESSION_FILE),
         help="Path to the stored auth JSON.",
@@ -607,7 +710,12 @@ def login_main() -> int:
     args = parser.parse_args()
 
     session_file = expand_session_file(args.session_file)
-    session_payload = login_interactively(session_file=session_file, email=args.email)
+    session_payload = bootstrap_login(
+        session_file=session_file,
+        email=args.email,
+        login_mode=args.login_mode,
+        web_timeout_seconds=args.web_timeout_seconds,
+    )
     print(
         json.dumps(
             {

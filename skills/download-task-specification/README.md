@@ -28,8 +28,8 @@ The installed script entrypoints delegate to the bundled shared
 ## Flow
 
 1. Refresh the stored Itera session if it already exists.
-2. If no valid session exists, prompt for email and emailed verification code.
-3. Complete MFA using TOTP, recovery code, or TOTP enrollment when required.
+2. If no valid session exists, start a short-lived local browser login UI on `127.0.0.1` and print the one-time URL.
+3. Complete email verification, TOTP, recovery code, or TOTP enrollment in that local UI. Set `PLAN_EXECUTION_LOGIN_MODE=terminal` to use the legacy prompt flow instead.
 4. Validate the authenticated session with `socialMe`.
 5. Read the full task payload using `getIterationTaskByCanonicalId(canonicalId)`.
 6. Derive build-oriented context such as repository hints, latest task runs,
@@ -74,6 +74,7 @@ Canonical contract in `input-contract.json`.
 
 - `scripts/download_task_specification.py`
 - `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/auth_web.py`
 - `scripts/plan_execution/graphql_client.py`
 - `scripts/plan_execution/artifacts.py`
 - `scripts/plan_execution/tasks.py`

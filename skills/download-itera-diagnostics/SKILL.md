@@ -29,7 +29,7 @@ See `input-contract.json`.
 
 1. Run `python3 ~/.codex/skills/download-itera-diagnostics/scripts/download_itera_diagnostics.py --organization-id <ORGANIZATION_ID>`.
 2. If the target-specific session file exists, refresh it with `refreshToken(refreshToken)`.
-3. If no valid session exists, bootstrap login with the same email, MFA, and TOTP enrollment flow used by the other plan execution skills.
+3. If no valid session exists, bootstrap login through a short-lived local browser UI on `127.0.0.1`; the user enters email verification, TOTP, recovery, or enrollment codes there, and the runtime stores the normal local session. Set `PLAN_EXECUTION_LOGIN_MODE=terminal` only when the legacy prompt flow is explicitly preferred.
 4. Validate the authenticated session with `socialMe`.
 5. Fetch `getOrganization(identifier)`.
 6. If `canonicalTaskId` is provided, fetch `getIterationTaskByCanonicalId(canonicalId)`.
@@ -64,6 +64,7 @@ See `input-contract.json`.
 
 - `scripts/download_itera_diagnostics.py`
 - `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/auth_web.py`
 - `scripts/plan_execution/graphql_client.py`
 - `scripts/plan_execution/artifacts.py`
 - `scripts/plan_execution/diagnostics.py`
