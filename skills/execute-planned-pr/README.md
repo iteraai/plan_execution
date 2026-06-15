@@ -14,6 +14,11 @@ Run:
 
 Use `--no-prompt` in automation when an interactive Itera login is not allowed. In that mode the command returns `AUTH_REQUIRED` if no refreshable stored session is available.
 
+Interactive login starts a short-lived local browser UI on `127.0.0.1` and
+prints a one-time URL. The user enters email verification, TOTP, recovery, or
+enrollment codes in that page, and the runtime writes the normal local session
+file. Set `PLAN_EXECUTION_LOGIN_MODE=terminal` to use the legacy prompt flow.
+
 ## Behavior
 
 The command refreshes or bootstraps Itera auth, fetches the task's current plan by canonical task ID, finds the planned PR by exact ID, validates that it is startable, builds `itera/<canonical-task-id-lower>/pr-<position+1>`, claims that PR, and returns implementation context as JSON.

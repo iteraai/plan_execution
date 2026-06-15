@@ -45,6 +45,11 @@ Use `--no-prompt` when automation should fail with `AUTH_REQUIRED` instead of
 starting interactive login. Use `--no-retained-logs` to skip retained log media
 resolution.
 
+Interactive login starts a short-lived local browser UI on `127.0.0.1` and
+prints a one-time URL. The user enters email verification, TOTP, recovery, or
+enrollment codes in that page, and the runtime writes the normal local session
+file. Set `PLAN_EXECUTION_LOGIN_MODE=terminal` to use the legacy prompt flow.
+
 ## Output
 
 By default, the skill writes:
@@ -67,6 +72,7 @@ retained log download metadata, and a concise derived `analysis` object.
 
 - `scripts/download_itera_diagnostics.py`
 - `scripts/plan_execution/auth.py`
+- `scripts/plan_execution/auth_web.py`
 - `scripts/plan_execution/graphql_client.py`
 - `scripts/plan_execution/artifacts.py`
 - `scripts/plan_execution/diagnostics.py`

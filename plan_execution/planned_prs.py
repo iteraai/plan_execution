@@ -1017,7 +1017,7 @@ def ensure_authenticated_context(
     if not interactive:
         raise AuthRequiredError("A valid Itera session is required")
 
-    payload = auth_login.login_interactively(session_file=session_file, config=config)
+    payload = auth_login.bootstrap_login(session_file=session_file, config=config)
     social_me = auth_refresh.fetch_social_me(payload["token"], config=config)
     return payload, social_me
 
