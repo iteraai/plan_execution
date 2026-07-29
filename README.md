@@ -65,6 +65,23 @@ outside the target project root, prefer an explicit destination such as:
 
 `python3 /path/to/plan_execution/install.py --cursor --destination-root /path/to/project/.cursor/rules`
 
+## Uninstall
+
+Run `python3 uninstall.py` to choose a target interactively, or pass the same
+target and skill options as the installer. For example:
+
+- `python3 uninstall.py --codex` removes all bundled Codex skills.
+- `python3 uninstall.py --claude --skill download-task-specification` removes
+  one Claude Code skill.
+- `python3 uninstall.py --all --dry-run` lists every installed bundle that
+  would be removed without changing any files.
+- `python3 uninstall.py --cursor --destination-root /path/to/project/.cursor/rules`
+  removes the Cursor rules and asset bundles from that project.
+
+The uninstaller removes only directories for this repository's known skill
+names, plus the matching Cursor `.mdc` file. It leaves target root directories
+and stored authentication sessions in place.
+
 Runtime artifact storage still defaults to `~/.codex/...` for backward
 compatibility. Runtime auth is target-aware:
 
